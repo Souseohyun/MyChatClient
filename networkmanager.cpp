@@ -53,8 +53,33 @@ void NetworkManager::ConnectToServer(){
 
 }
 
-void NetworkManager::ConnectToServer(std::string &ip, std::string &port)
+void NetworkManager::ConnectToServer(const std::string &ip,const std::string &port)
 {
+    using tcp = boost::asio::ip::tcp;
+
+    tcp::resolver resolver(GetIOC());
+
+    auto endpoints = resolver.resolve(ip, port);
+
+    socket_.async_connect(*endpoints.begin(),
+                          [this](const boost::system::error_code& ec)
+                          {
+                              if(!ec){
+                                  // qDebug()<<"connect success";
+                                  //ReadFromServer();
+                              }else{
+
+
+                              }
+                          });
+
+    //单独起一个线程负责ioc_run()
+    std::thread([&](){
+        boost::asio::io_context::work work(GetIOC());
+
+        GetIOC().run();
+        std::cout << "io_context stopped running" << std::endl;
+    }).detach();
 
 }
 
@@ -115,9 +140,9 @@ void NetworkManager::ProcessServerResponse(const std::string &responseData)
     auto responseJson = nlohmann::json::parse(responseData);
     bool success = responseJson["login_success"];
     std::string message = responseJson["message"];
-    std::string user_id = responseJson["user_id"];
-    //把信息由信号携带发送回loginWidget让他处理逻辑
-    emit loginResponseReceived(success, QString::fromStdString(message),QString::fromStdString(user_id));
+    int user_id = responseJson["user_id"];
+    //把信息由信号携带发送回loginWidget让他使用这些数据创建一个chatwindow
+    emit loginResponseReceived(success, QString::fromStdString(message),user_id);
 }
 
 

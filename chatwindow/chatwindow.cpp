@@ -2,8 +2,8 @@
 
 #include "chatwindow/ui_chatwindow.h"
 
-ChatWindow::ChatWindow(boost::asio::ip::tcp::socket socket,std::string user_id,QWidget *parent)
-    : networkManager_(std::move(socket)),QWidget(parent)
+ChatWindow::ChatWindow(boost::asio::ip::tcp::socket socket,int& user_id,QWidget *parent)
+    : chatNetworkManager_(std::move(socket)),QWidget(parent)
     , ui(new Ui::ChatWindow)
 {
     ui->setupUi(this);
@@ -14,7 +14,7 @@ ChatWindow::ChatWindow(boost::asio::ip::tcp::socket socket,std::string user_id,Q
 
 
     //连接网络类信号与chatwindow的槽
-    connect(&networkManager_, &NetworkManager::messageReceived,
+    connect(&chatNetworkManager_, &NetworkManager::messageReceived,
             this, &ChatWindow::displayReceivedData);
 
     //connect(&networkManager_, &NetworkManager::dataReceived, this, &ChatWindow::displayReceivedData);=-
@@ -23,7 +23,7 @@ ChatWindow::ChatWindow(boost::asio::ip::tcp::socket socket,std::string user_id,Q
     // addMessage("Hi, how are you?", "12:01", QNChatMessage::User_She);
     // addMessage("Fuck u Windows;Fuck u Qt", "12:01", QNChatMessage::User_Me);
 
-    networkManager_.ListeningFromSrv();
+    chatNetworkManager_.ListeningFromSrv();
 
 
     ui->listWidget->update(); // 更新列表
@@ -38,7 +38,7 @@ ChatWindow::ChatWindow(boost::asio::ip::tcp::socket socket,std::string user_id,Q
 
 ChatWindow::~ChatWindow()
 {
-    networkManager_.CloseSocket();
+    chatNetworkManager_.CloseSocket();
     delete ui;
 }
 
@@ -127,7 +127,7 @@ void ChatWindow::onTextEidtReturnPressed(){
         json["type"] = "message_text";
         json["text"] = text.toStdString();
 
-        networkManager_.SendToServer(json);
+        chatNetworkManager_.SendToServer(json);
         // 清空发送框 textEdit 控件内容
         ui->textEdit->clear();
     }

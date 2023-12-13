@@ -26,7 +26,7 @@ class ChatWindow : public QWidget
     Q_OBJECT
 
 public:
-    explicit ChatWindow(boost::asio::ip::tcp::socket socket,std::string user_id,
+    explicit ChatWindow(boost::asio::ip::tcp::socket socket,int& user_id,
                         QWidget *parent = nullptr);
     ~ChatWindow();
 
@@ -65,12 +65,12 @@ private:
 
 private:
     Ui::ChatWindow *ui;
-    NetworkManager networkManager_;
+    NetworkManager chatNetworkManager_;
 
 
 //用户信息
 private:
-    std::string userId_;
+    int userId_;
 };
 
 #endif // CHATWINDOW_H

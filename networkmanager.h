@@ -24,7 +24,7 @@ private:
 signals:
     void dataReceived(const QString& data);//已废弃
 
-    void loginResponseReceived(bool success, const QString& message,const QString&user_id);
+    void loginResponseReceived(bool success, const QString& message,int user_id);
     void messageReceived(const QString& message);
 
 public:
@@ -32,6 +32,7 @@ public:
     NetworkManager(boost::asio::ip::tcp::socket socket);
 
     void ConnectToServer();
+    void ConnectToServer(const std::string& ip,const std::string& port);
     void ReadFromServer();
     void SendToServer(const nlohmann::json& jsonMessage);
     void ReceiveServerResponse();

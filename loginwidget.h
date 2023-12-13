@@ -52,7 +52,7 @@ private slots:
 
     void on_pushButton_clicked();
 
-    void onLoginResponseReceived(bool success, const QString& message,const QString& user_id);
+    void onLoginResponseReceived(bool success, const QString& message,int user_id);
 protected:
 
 

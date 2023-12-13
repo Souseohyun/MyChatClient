@@ -143,15 +143,15 @@ void LoginWidget::on_pushButton_clicked()
 }
 
 
-//networkManager登录核验成功后发射信号调用该槽函数
-void LoginWidget::onLoginResponseReceived(bool success, const QString& message,const QString& user_id) {
+//networkManager登录核验成功后发射信号调用该槽函数,int不能传&，信号要求可存储与复制
+void LoginWidget::onLoginResponseReceived(bool success, const QString& message,int user_id) {
     std::cout<<"into onLoginResponseReceived"<<std::endl;
     if (success) {
         // 登录成功，创建并显示新的业务窗口
         // auto businessWindow = new BusinessWidget(); // 假设 BusinessWindow 是业务窗口的类
         // businessWindow->show();
 
-        auto chatwindow = new ChatWindow(std::move(networkManager_.GetSocket()),user_id.toStdString());
+        auto chatwindow = new ChatWindow(std::move(networkManager_.GetSocket()),user_id);
 
         chatwindow->show();
 

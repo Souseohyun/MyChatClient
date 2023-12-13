@@ -29,6 +29,7 @@
 
 //cpp
 #include <iostream>
+#include <string>
 
 #pragma comment(lib, "dwmapi.lib")
 
@@ -51,7 +52,7 @@ private slots:
 
     void on_pushButton_clicked();
 
-    void onLoginResponseReceived(bool success, const QString& message);
+    void onLoginResponseReceived(bool success, const QString& message,const QString& user_id);
 protected:
 
 

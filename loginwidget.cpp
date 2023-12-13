@@ -24,7 +24,7 @@ LoginWidget::LoginWidget(QWidget *parent)
     this->CreatHeadPic();
 
     //连接服务器
-    networkManager_.ConnectToServer();
+    networkManager_.ConnectToServer("172.30.229.221","23610");
 
     //绑定信号与槽
     //connect(&networkManager_, &NetworkManager::dataReceived, this, &MainWindow::displayReceivedData);
@@ -138,23 +138,25 @@ void LoginWidget::on_pushButton_clicked()
     // 通过 NetworkManager 发送 JSON 数据到服务器
     networkManager_.SendToServer(json);
 
+    //该函数用于接收服务器发回的确认信息，并emit本窗口调用onLogin槽函数
     networkManager_.ReceiveServerResponse();
 }
 
 
-void LoginWidget::onLoginResponseReceived(bool success, const QString& message) {
+//networkManager登录核验成功后发射信号调用该槽函数
+void LoginWidget::onLoginResponseReceived(bool success, const QString& message,const QString& user_id) {
     std::cout<<"into onLoginResponseReceived"<<std::endl;
     if (success) {
         // 登录成功，创建并显示新的业务窗口
         // auto businessWindow = new BusinessWidget(); // 假设 BusinessWindow 是业务窗口的类
         // businessWindow->show();
 
-        auto chatwindow = new ChatWindow();
+        auto chatwindow = new ChatWindow(std::move(networkManager_.GetSocket()),user_id.toStdString());
 
         chatwindow->show();
 
         // 关闭登录窗口
-        //this->close();
+        this->close();
     } else {
         // 登录失败，显示错误信息
         QMessageBox::warning(this, "Login Failed", message);

@@ -7,7 +7,8 @@
 #include <QLabel>
 #include <QDebug>
 
-QNChatMessage::QNChatMessage(QWidget *parent) : QWidget(parent)
+QNChatMessage::QNChatMessage(QWidget *parent)
+: QWidget(parent)
 {
 
     QFont te_font = this->font();

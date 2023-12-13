@@ -2,8 +2,8 @@
 
 #include "chatwindow/ui_chatwindow.h"
 
-ChatWindow::ChatWindow(QWidget *parent)
-    : QWidget(parent)
+ChatWindow::ChatWindow(boost::asio::ip::tcp::socket socket,std::string user_id,QWidget *parent)
+    : networkManager_(std::move(socket)),QWidget(parent)
     , ui(new Ui::ChatWindow)
 {
     ui->setupUi(this);
@@ -12,11 +12,18 @@ ChatWindow::ChatWindow(QWidget *parent)
     //setMouseTracking(true);// 设置鼠标跟踪，不然只会在鼠标按下时才会触发鼠标移动事件
     //setWindowIcon(QIcon(""));
 
-    //连接信号(dataReceived)与槽（displayReceivedData())
+
+    //连接网络类信号与chatwindow的槽
+    connect(&networkManager_, &NetworkManager::messageReceived,
+            this, &ChatWindow::displayReceivedData);
+
     //connect(&networkManager_, &NetworkManager::dataReceived, this, &ChatWindow::displayReceivedData);=-
-    addMessage("Hello!", "12:00", QNChatMessage::User_Me);
-    addMessage("Hi, how are you?", "12:01", QNChatMessage::User_She);
-    addMessage("Fuck u Windows;Fuck u Qt", "12:01", QNChatMessage::User_Me);
+
+    // addMessage("Hello!", "12:00", QNChatMessage::User_Me);
+    // addMessage("Hi, how are you?", "12:01", QNChatMessage::User_She);
+    // addMessage("Fuck u Windows;Fuck u Qt", "12:01", QNChatMessage::User_Me);
+
+    networkManager_.ListeningFromSrv();
 
 
     ui->listWidget->update(); // 更新列表
@@ -31,11 +38,13 @@ ChatWindow::ChatWindow(QWidget *parent)
 
 ChatWindow::~ChatWindow()
 {
+    networkManager_.CloseSocket();
     delete ui;
 }
 
 void ChatWindow::on_toolButton_clicked()
 {
+
     this->close();
 }
 
@@ -91,11 +100,11 @@ void ChatWindow::addMessage(const QString &text, const QString &time, QNChatMess
 //将服务器读来内容借助addMessage同步到显示listwidget中
 void ChatWindow::displayReceivedData(const QString& data) {
 
-    addMessage(data, "12:00", QNChatMessage::User_Me);
+    addMessage(data, "12:00", QNChatMessage::User_She);
 }
 
 
-//事件过滤器处理函数
+//事件过滤器处理函数(针对textEdit的回车事件）
 bool ChatWindow::eventFilter(QObject *obj, QEvent *event) {
     if (obj == ui->textEdit && event->type() == QEvent::KeyPress) {
         QKeyEvent *keyEvent = static_cast<QKeyEvent *>(event);
@@ -113,6 +122,12 @@ void ChatWindow::onTextEidtReturnPressed(){
         // 同步显示到 listWidget 控件
         addMessage(text,"12:00",QNChatMessage::User_Me);
 
+        // 使用 nlohmann::json 创建 JSON 对象
+        nlohmann::json json;
+        json["type"] = "message_text";
+        json["text"] = text.toStdString();
+
+        networkManager_.SendToServer(json);
         // 清空发送框 textEdit 控件内容
         ui->textEdit->clear();
     }

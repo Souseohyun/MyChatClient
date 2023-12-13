@@ -8,6 +8,7 @@
 #include <QPushButton>
 #include <QVBoxLayout>
 #include <QMouseEvent>
+#include <nlohmann/json.hpp>
 
 
 #include "bubbleinfo.h"
@@ -25,7 +26,8 @@ class ChatWindow : public QWidget
     Q_OBJECT
 
 public:
-    explicit ChatWindow(QWidget *parent = nullptr);
+    explicit ChatWindow(boost::asio::ip::tcp::socket socket,std::string user_id,
+                        QWidget *parent = nullptr);
     ~ChatWindow();
 
 private slots:
@@ -50,11 +52,13 @@ protected:
     QPoint last;
 
 
-
+//组件信息
 private:
+    QPixmap      myPic;
     QListWidget* listWidget;
     QLineEdit* lineEdit;
     QPushButton* sendButton;
+
 
     void addMessage(const QString &text, const QString &time, QNChatMessage::User_Type userType);
 
@@ -64,6 +68,9 @@ private:
     NetworkManager networkManager_;
 
 
+//用户信息
+private:
+    std::string userId_;
 };
 
 #endif // CHATWINDOW_H

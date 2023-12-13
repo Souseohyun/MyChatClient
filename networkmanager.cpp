@@ -1,12 +1,30 @@
 #include "networkmanager.h"
+//不传参，默认设置iocontext
+NetworkManager::NetworkManager() :socket_(GetIOC()),testBuff_(1024){}
 
-NetworkManager::NetworkManager() :testBuff_(1024){}
+NetworkManager::NetworkManager(boost::asio::ip::tcp::socket socket)
+    :socket_(std::move(socket)),testBuff_(1024)
+{
+    //move create
+}
+
+//传参，使用move移交socket所有权
+
+boost::asio::io_context &NetworkManager::GetIOC(){
+    static boost::asio::io_context ioc;
+    return ioc;
+}
+
+boost::asio::ip::tcp::socket &NetworkManager::GetSocket()
+{
+    return this->socket_;
+}
 
 
 void NetworkManager::ConnectToServer(){
     using tcp = boost::asio::ip::tcp;
 
-    tcp::resolver resolver(ioc_);
+    tcp::resolver resolver(GetIOC());
 #ifdef _RELEASE
     auto endpoints = resolver.resolve("122.51.38.77", "23610");
 #else
@@ -27,11 +45,16 @@ void NetworkManager::ConnectToServer(){
 
     //单独起一个线程负责ioc_run()
     std::thread([&](){
-        boost::asio::io_context::work work(ioc_);
+        boost::asio::io_context::work work(GetIOC());
 
-        ioc_.run();
+        GetIOC().run();
         std::cout << "io_context stopped running" << std::endl;
     }).detach();
+
+}
+
+void NetworkManager::ConnectToServer(std::string &ip, std::string &port)
+{
 
 }
 
@@ -66,7 +89,7 @@ void NetworkManager::SendToServer(const nlohmann::json& jsonMessage){
 
 }
 
-//用于读取登陆回馈验证信息
+//仅用于读取登陆回馈验证信息
 void NetworkManager::ReceiveServerResponse()
 {
 
@@ -92,10 +115,55 @@ void NetworkManager::ProcessServerResponse(const std::string &responseData)
     auto responseJson = nlohmann::json::parse(responseData);
     bool success = responseJson["login_success"];
     std::string message = responseJson["message"];
-
+    std::string user_id = responseJson["user_id"];
     //把信息由信号携带发送回loginWidget让他处理逻辑
-    emit loginResponseReceived(success, QString::fromStdString(message));
+    emit loginResponseReceived(success, QString::fromStdString(message),QString::fromStdString(user_id));
 }
+
+
+
+void NetworkManager::ListeningFromSrv()
+{
+    boost::asio::async_read_until(socket_, buff_, "\r\n",
+                                  [this](const boost::system::error_code& ec, std::size_t bytes_transferred) {
+                                      if (!ec) {
+                                          std::istream responseStream(&buff_);
+                                          std::string responseData((std::istreambuf_iterator<char>(responseStream)), std::istreambuf_iterator<char>());
+                                          buff_.consume(bytes_transferred); // 清除已读取的数据
+
+                                          try {
+                                              auto receivedJson = nlohmann::json::parse(responseData);
+                                              HandleReceivedData(receivedJson);
+                                          } catch (const nlohmann::json::exception& e) {
+                                              // JSON解析错误
+                                              std::cerr << "JSON parsing error: " << e.what() << std::endl;
+                                          }
+                                      } else {
+                                          // 错误处理
+                                          std::cerr << "Error receiving data: " << ec.message() << std::endl;
+                                      }
+                                  }
+                                  );
+}
+
+void NetworkManager::HandleReceivedData(const nlohmann::json &data)
+{
+    std::string type = data.value("type", "");
+    if (type == "re_message_text") {
+        // 处理文本消息
+        std::string textMessage = data.value("data", "");
+
+        // 发射信号,提示chatwindow采取动作
+        emit messageReceived(QString::fromStdString(textMessage));
+
+        //最后再调用Listen一直监听
+        ListeningFromSrv();
+    }
+    // 添加更多type的处理...
+}
+
+
+
 
 void NetworkManager::CloseSocket(){
     socket_.close();

@@ -35,8 +35,9 @@ private slots:
 
 
 public slots:
-    void displayReceivedData(const QString& data);
-
+    void displayReceivedData(const QString& data,int userId);
+    void updateReceivedHeader(const QByteArray& headData);
+    void updateReceivedImage(const QByteArray& imageData);
 public:
     void onTextEidtReturnPressed();
 
@@ -55,18 +56,19 @@ protected:
 //组件信息
 private:
     QPixmap      myPic;
+    QPixmap      youPic;
     QListWidget* listWidget;
     QLineEdit* lineEdit;
     QPushButton* sendButton;
 
 
-    void addMessage(const QString &text, const QString &time, QNChatMessage::User_Type userType);
+    void addMessage(const QString &text, const QString &time, QNChatMessage::User_Type userType,int addUserId);
 
 
 private:
     Ui::ChatWindow *ui;
     NetworkManager chatNetworkManager_;
-
+    NetworkManager imageNetworkManager_;
 
 //用户信息
 private:

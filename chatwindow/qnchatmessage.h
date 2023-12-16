@@ -14,6 +14,9 @@ class QNChatMessage : public QWidget
     Q_OBJECT
 public:
     explicit QNChatMessage(QWidget *parent = nullptr);
+    explicit QNChatMessage(const QPixmap& rightPixmap, QWidget *parent = nullptr);
+
+
 
     enum User_Type{
 
@@ -22,6 +25,10 @@ public:
         User_She,   //用户
         User_Time,  //时间
     };
+
+    void SetHeaderImage(User_Type userType,QPixmap& headerPic);
+
+
     void setTextSuccess();
     void setText(QString text, QString time, QSize allSize, User_Type userType);
 

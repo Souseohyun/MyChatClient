@@ -19,8 +19,8 @@ QNChatMessage::QNChatMessage(QWidget *parent)
     // te_font.setLetterSpacing(QFont::PercentageSpacing, 100); //300%,100为默认 //设置字间距%
     // te_font.setLetterSpacing(QFont::AbsoluteSpacing, 0); //设置字间距为3像素 //设置字间距像素值
     this->setFont(te_font);
-    m_leftPixmap = QPixmap(":/Sulli.jpg");
-    m_rightPixmap = QPixmap(":/ChuxianC.jpg");
+    //m_leftPixmap = QPixmap(":/Sulli.jpg");
+    //m_rightPixmap = QPixmap(":/ChuxianC.jpg");
 
     m_loadingMovie = new QMovie(this);
     m_loadingMovie->setFileName(":/img/loading4.gif");
@@ -30,6 +30,39 @@ QNChatMessage::QNChatMessage(QWidget *parent)
     m_loading->setAttribute(Qt::WA_TranslucentBackground , true);
     m_loading->setAutoFillBackground(false);
 }
+
+QNChatMessage::QNChatMessage(const QPixmap &rightPixmap, QWidget *parent)
+:QWidget(parent), m_rightPixmap(rightPixmap)
+{
+    QFont te_font = this->font();
+    te_font.setFamily("MicrosoftYaHei");
+    te_font.setPointSize(12);
+
+    this->setFont(te_font);
+    m_leftPixmap = QPixmap(":/Sulli.jpg");
+    //m_rightPixmap = QPixmap(":/ChuxianC.jpg");
+
+    m_loadingMovie = new QMovie(this);
+    m_loadingMovie->setFileName(":/img/loading4.gif");
+    m_loading = new QLabel(this);
+    m_loading->setMovie(m_loadingMovie);
+    m_loading->resize(16,16);
+    m_loading->setAttribute(Qt::WA_TranslucentBackground , true);
+    m_loading->setAutoFillBackground(false);
+}
+
+void QNChatMessage::SetHeaderImage(User_Type userType, QPixmap& headerPic)
+{
+    if(userType == User_Me){
+        m_rightPixmap = headerPic;
+    }else if(userType == User_She){
+        m_leftPixmap = headerPic;
+    }else{
+        qDebug()<<"SetHeaderImage Error";
+    }
+}
+
+
 
 void QNChatMessage::setTextSuccess()
 {

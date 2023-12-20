@@ -18,6 +18,7 @@ private:
     //转为采用Get IOC()，维系iocontext单例设计模式
     //boost::asio::io_context      ioc_;
     //只共享ioc，其他资源独立，不需要静态锁
+    std::condition_variable      netCond_;
     std::mutex                   netMutex_;
     boost::asio::ip::tcp::socket socket_;
     boost::asio::streambuf       buff_;
@@ -27,7 +28,9 @@ private:
     std::vector<char>       testBuff_;
 
 public:
-    bool                         isConnect_{false};
+    bool                         isConnect_ {false};
+    bool                         isHead_    {true};
+    bool                         readyToSend_ {false}; // 初始状态表示还未准备好发送气泡
 
 
 signals:
@@ -67,9 +70,11 @@ public:
     static boost::asio::io_context &GetIOC();
     //协调各服务器链接的全局strand
     static boost::asio::strand<boost::asio::io_context::executor_type> &GetGlobalStrand();
-
     boost::asio::strand<boost::asio::io_context::executor_type> &GetStrand();
     boost::asio::ip::tcp::socket &GetSocket();
+    //条件变量与锁
+    std::mutex& GetMutex();
+    std::condition_variable& GetCond();
     void CloseSocket();
 
 private:

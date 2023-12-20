@@ -3,5 +3,8 @@
         <file>ChuxianC.jpg</file>
         <file>Sulli.jpg</file>
         <file>log.txt</file>
+        <file>chatApp.ico</file>
+        <file>login/login_backgroud.gif</file>
+        <file>login/mychat_logo.png</file>
     </qresource>
 </RCC>

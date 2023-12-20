@@ -12,6 +12,7 @@
 #include <QStyle>
 #include <QPixmap>
 #include <QPainter>
+#include <QMovie>
 
 //mouse move
 #include<QPoint>
@@ -67,6 +68,9 @@ private:
     NetworkManager networkManager_;
 
     void CreatHeadPic();
+    void CreatBackgroud();
+    void CreatLogo();
+    void CreatShadow();
 
 
 

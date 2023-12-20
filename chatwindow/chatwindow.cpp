@@ -8,7 +8,8 @@ ChatWindow::ChatWindow(boost::asio::ip::tcp::socket socket,int& user_id,QWidget 
 {
     ui->setupUi(this);
     //设置无系统窗口
-    this->setWindowFlags(Qt::SplashScreen|Qt::FramelessWindowHint);
+    //Qt::SplashScreen|
+    this->setWindowFlags(Qt::FramelessWindowHint|Qt::Window);
     //setMouseTracking(true);// 设置鼠标跟踪，不然只会在鼠标按下时才会触发鼠标移动事件
     //setWindowIcon(QIcon(""));
 
@@ -34,17 +35,17 @@ ChatWindow::ChatWindow(boost::asio::ip::tcp::socket socket,int& user_id,QWidget 
     chatNetworkManager_.ListeningFromChatSrv();
 
     //如果此时并没有建立好链接(丑陋的等待，但无伤大雅，顶多1s，你也可以优化成条件变量互斥量）
-    while(!imageNetworkManager_.isConnect_){
-        std::cout<<"image connect ing"<<std::endl;
-    }
+    // while(!imageNetworkManager_.isConnect_){
+    //     std::cout<<"image connect ing"<<std::endl;
+    // }
+    std::unique_lock<std::mutex> lock(imageNetworkManager_.GetMutex());
+    imageNetworkManager_.GetCond().wait(lock, [this] { return imageNetworkManager_.isConnect_; }); // 等待连接建立
+
     std::string http = imageNetworkManager_.as_HttpGetImageByUserId(userId_);
     imageNetworkManager_.SendToImageServer(http);
     imageNetworkManager_.RecvMyheadImageSrv();
 
-    while(!imageNetworkManager_.isConnect_){
-        std::cout<<"RecvMyheadImageSrv ing"<<std::endl;
-    }
-    imageNetworkManager_.ListeningFromImageSrv();
+    //imageNetworkManager_.ListeningFromImageSrv();     在RecvMyhead函数回调中调用了
 
 
     ui->listWidget->update(); // 更新列表
@@ -66,7 +67,8 @@ ChatWindow::~ChatWindow()
 void ChatWindow::on_toolButton_clicked()
 {
 
-    this->close();
+    //this->close();
+    QApplication::quit();
 }
 
 void ChatWindow::mousePressEvent(QMouseEvent *event)
@@ -107,6 +109,10 @@ void ChatWindow::addMessage(const QString &text, const QString &time, QNChatMess
     std::string http = imageNetworkManager_.as_HttpGetImageByUserId(addUserId);
     imageNetworkManager_.SendToImageServer(http);
     //发送该报文后，imageNetwork中的监听函数会即使emit信号更新youPic
+
+
+
+
     if(userType == QNChatMessage::User_Type::User_Me){
         message->SetHeaderImage(userType,myPic);
     }else if(userType == QNChatMessage::User_Type::User_She){
@@ -159,6 +165,8 @@ void ChatWindow::updateReceivedImage(const QByteArray &imageData)
     if (pixmap.loadFromData(imageData)) {
         youPic = pixmap;
         // 可以在这里更新 UI 或进行其他操作
+        imageNetworkManager_.readyToSend_ = true;
+
     }
 
 }

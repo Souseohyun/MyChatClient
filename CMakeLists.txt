@@ -59,6 +59,7 @@ if(${QT_VERSION_MAJOR} GREATER_EQUAL 6)
         chatwindow/bubbleinfo.h chatwindow/bubbleinfo.cpp
         chatwindow/bubbleitemwidget.h chatwindow/bubbleitemwidget.cpp
         chatwindow/qnchatmessage.h chatwindow/qnchatmessage.cpp
+        clientwindow.h clientwindow.cpp clientwindow.ui
     )
 # Define target properties for Android with Qt 6 as:
 #    set_property(TARGET MychatClient APPEND PROPERTY QT_ANDROID_PACKAGE_SOURCE_DIR

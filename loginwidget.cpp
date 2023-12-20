@@ -7,12 +7,13 @@ LoginWidget::LoginWidget(QWidget *parent)
     : QWidget(parent)
     , ui(new Ui::LoginWidget)
 {
-    //设置无系统窗口
+    //设置透明背景
+    this->setAttribute(Qt::WA_TranslucentBackground);
+    //设置无系统边框
     this->setWindowFlags(Qt::SplashScreen|Qt::WindowStaysOnTopHint|Qt::FramelessWindowHint);
 
-    setAttribute(Qt::WA_TranslucentBackground);
 
-
+    this->CreatShadow();        //创建无边框窗口阴影
 
 
     ui->setupUi(this);
@@ -20,9 +21,9 @@ LoginWidget::LoginWidget(QWidget *parent)
     ui->hideButton->setIcon(style()->standardIcon(QStyle::SP_TitleBarMinButton));
     ui->closeButton->setIcon(style()->standardIcon(QStyle::SP_DialogCloseButton));
 
-
+    this->CreatBackgroud();
     this->CreatHeadPic();
-
+    this->CreatLogo();
     //连接服务器
     networkManager_.ConnectToServer("172.30.229.221","23610");
 
@@ -115,6 +116,42 @@ void LoginWidget::CreatHeadPic()
     ui->headPicLabel->setScaledContents(true);
 }
 
+void LoginWidget::CreatBackgroud()
+{
+    QMovie* movie = new QMovie(":/login/login_backgroud.gif");
+    ui->backLabel->setAlignment(Qt::AlignCenter);    // 设置标签对齐方式为居中
+    movie->setScaledSize(ui->backLabel->size()+QSize(50,50));  // 将 GIF 缩放到略大 QLabel 的大小
+
+    ui->backLabel->setMovie(movie);
+    ui->backLabel->setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding); // 设置大小策略
+    movie->start();
+}
+
+void LoginWidget::CreatLogo()
+{
+    QPixmap logoPixmap(":/login/mychat_logo.png");
+    // 假设我们想要将 logo 放大到原来的 1.5 倍大小
+    QSize newSize = logoPixmap.size() * 1.5;
+    QPixmap scaledLogo = logoPixmap.scaled(newSize, Qt::KeepAspectRatio, Qt::SmoothTransformation);  // 放大图像并保持宽高比
+
+    ui->logoLabel->setPixmap(scaledLogo);  // 将缩放后的 QPixmap 设置到 QLabel
+    ui->logoLabel->setAlignment(Qt::AlignCenter);  // 如果需要，可以设置标签的对齐方式为居中
+
+}
+
+void LoginWidget::CreatShadow()
+{
+
+    QGraphicsDropShadowEffect *shadow = new QGraphicsDropShadowEffect(this);
+    shadow->setOffset(0, 0);
+    shadow->setColor(QColor("#444444"));
+    shadow->setBlurRadius(30);
+    this->setGraphicsEffect(shadow);
+    this->setContentsMargins(1,1,1,1);
+
+
+}
+
 
 
 
@@ -152,6 +189,13 @@ void LoginWidget::onLoginResponseReceived(bool success, const QString& message,i
         // businessWindow->show();
 
         auto chatwindow = new ChatWindow(std::move(networkManager_.GetSocket()),user_id);
+        QIcon icon(":/chatApp.ico");
+
+        //debug_用
+
+
+        chatwindow->setWindowTitle("Mychat");
+        chatwindow->setWindowIcon(icon);
 
         chatwindow->show();
 

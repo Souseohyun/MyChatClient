@@ -33,6 +33,16 @@ boost::asio::ip::tcp::socket &NetworkManager::GetSocket()
     return this->socket_;
 }
 
+std::mutex &NetworkManager::GetMutex()
+{
+    return this->netMutex_;
+}
+
+std::condition_variable &NetworkManager::GetCond()
+{
+    return this->netCond_;
+}
+
 
 void NetworkManager::ConnectToServer(){
     using tcp = boost::asio::ip::tcp;
@@ -74,17 +84,23 @@ void NetworkManager::ConnectToServer(const std::string &ip,const std::string &po
     auto endpoints = resolver.resolve(ip, port);
 
     socket_.async_connect(*endpoints.begin(),
+                          boost::asio::bind_executor(GetStrand(),
                           [this](const boost::system::error_code& ec)
                           {
                               if(!ec){
                                   std::cout<<"connect success"<<std::endl;
-                                  isConnect_ = true;
-                                  //ReadFromServer();
+                                  {
+                                      std::lock_guard<std::mutex> lock(netMutex_);
+                                      isConnect_ = true;
+                                  }
+                                  netCond_.notify_one(); // 通知条件变量
+
                               }else{
 
 
                               }
-                          });
+                                                     })
+                          );
 
     //单独起一个线程负责ioc_run()
     std::thread([&](){
@@ -228,20 +244,26 @@ std::string NetworkManager::as_HttpGetImageByUserId(int &userId)
 void NetworkManager::SendToImageServer(std::string &buf)
 {
 
+std::cout << "Attempting to send data to image server" << std::endl;
     // 将字符串转换为 QByteArray
     //QByteArray data = QByteArray::fromStdString(buf);
 
     // 异步发送数据
     boost::asio::async_write(socket_, boost::asio::buffer(buf,buf.size()),
+                             boost::asio::bind_executor(GetStrand(),
                              [this](boost::system::error_code ec, std::size_t /*length*/) {
                                  if (!ec) {
                                      // 数据成功发送
                                      std::cout<<"send image server success"<<std::endl;
+                                     {
+                                         if(isHead_){}
+
+                                     }
                                  } else {
                                      // 发生错误，可能需要进行错误处理
                                      std::cerr << "Error on send image server: " << ec.message() << std::endl;
                                  }
-                             }
+                             })
                              );
 
 
@@ -249,14 +271,19 @@ void NetworkManager::SendToImageServer(std::string &buf)
 
 void NetworkManager::RecvMyheadImageSrv()
 {
-    isConnect_ = false;
+
+    isHead_ = false;
+
+
     std::cout<<"into RecvMyheadImageSrv()"<<std::endl;
     ClearStreambuf(buff_);
     // 读到 "\r\n\r\n" 只是读完了 http 头部
     if(socket_.is_open()){
         std::cout<<"is open"<<std::endl;
     }
+    //不能直接指定strand，我们可以用绑定执行器的方式，bind_executor极为重要
     boost::asio::async_read_until(socket_, buff_, "\r\n\r\n",
+                                  boost::asio::bind_executor(GetStrand(),
                                   [this](const boost::system::error_code& ec, std::size_t bytes_transferred) {
                                       if (!ec) {
             std::cout<<"into read until"<<std::endl;
@@ -282,8 +309,10 @@ void NetworkManager::RecvMyheadImageSrv()
                                           // 现在读取剩余的图像数据
                                           boost::asio::async_read(socket_, buff_,
                                                                   boost::asio::transfer_exactly(content_length - already_read_content_length),
+                                                                  boost::asio::bind_executor(GetStrand(),
                                                                   [this, content_length](const boost::system::error_code& ec, std::size_t bytes_transferred) {
                                                                       if (!ec) {
+                                                                          std::cout<<"into RecvMyhead async_read"<<std::endl;
                                                                           // 响应数据现在在 buff_ 中，处理图像数据...
                                                                           std::string image_data(boost::asio::buffers_begin(buff_.data()), boost::asio::buffers_end(buff_.data()));
                                                                           // 清空缓冲区
@@ -292,21 +321,25 @@ void NetworkManager::RecvMyheadImageSrv()
                                                                           // 将 std::string 转换为 QByteArray
                                                                           QByteArray qByteArray(image_data.data(), static_cast<int>(image_data.size()));
 
-                                                                          // 发射信号
+                                                                          // 发射信号,
                                                                           emit headerReceived(qByteArray);
-                                                                          isConnect_ = true;
+                                                                          //isConnect_ = true;
+
+                                                                          ListeningFromImageSrv();
 
 
                                                                       } else {
                                                                           // 错误处理
                                                                           std::cerr << "Error receiving image data: " << ec.message() << std::endl;
                                                                       }
-                                                                  });
+                                                                  }  )
+                                                                  );
                                       } else {
                                           // 错误处理
                                           std::cerr << "Error receiving header data: " << ec.message() << std::endl;
                                       }
-                                  });
+                                  }     )
+                                  );
 }
 
 //由于ImageServer之间交互为http报文，所以重写监听函数是必要的

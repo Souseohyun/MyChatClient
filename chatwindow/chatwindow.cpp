@@ -1,54 +1,47 @@
 #include "chatwindow.h"
 
 #include "chatwindow/ui_chatwindow.h"
+#include "base/emojipicker.h"
 
-ChatWindow::ChatWindow(boost::asio::ip::tcp::socket socket,int& user_id,QWidget *parent)
-    : chatNetworkManager_(std::move(socket)),userId_(user_id),QWidget(parent)
-    , ui(new Ui::ChatWindow)
-{
+#include <QWidgetAction>
+
+ChatWindow::ChatWindow(NetworkManager& chatNet,NetworkManager& imageNet, int& user_id,int& son_id,QString name,QPixmap myHead,QPixmap youHead, QWidget *parent)
+    : QWidget(parent),
+    chatNetworkManager_(chatNet), imageNetworkManager_(imageNet),
+    userId_(user_id),toId_(son_id),
+    myPic(myHead),youPic(youHead),
+    ui(new Ui::ChatWindow) {
+
     ui->setupUi(this);
-    //设置无系统窗口
-    //Qt::SplashScreen|
-    this->setWindowFlags(Qt::FramelessWindowHint|Qt::Window);
-    //setMouseTracking(true);// 设置鼠标跟踪，不然只会在鼠标按下时才会触发鼠标移动事件
-    //setWindowIcon(QIcon(""));
 
-    //初始化图像服务器
-    imageNetworkManager_.ConnectToServer("172.30.229.221","23611");
+    this->setWindowFlags(Qt::FramelessWindowHint | Qt::Window);
 
-
-
-    //连接网络类信号与chatwindow的槽
-    //信息与信息槽
-    connect(&chatNetworkManager_, &NetworkManager::messageReceived,
-            this, &ChatWindow::displayReceivedData);
-    //头像与更新myPic槽
-    connect(&imageNetworkManager_, &NetworkManager::headerReceived,
-            this, &ChatWindow::updateReceivedHeader);
     //图像与图像槽
     connect(&imageNetworkManager_, &NetworkManager::imageReceived,
             this, &ChatWindow::updateReceivedImage);
 
-    // addMessage("Hello!", "12:00", QNChatMessage::User_Me);
+    //addMessage("Hello!", "12:00", QNChatMessage::User_Me,userId_);
 
+    //设置聊天对方用户名
+    chatName = new QLabel(this);
+    chatName->setText(name); // 这里设置为 "text"，您可以稍后改为正确的用户名
 
-    chatNetworkManager_.ListeningFromChatSrv();
+    ui->pushButton->setText("发 送");
+    ui->pushButton->setStyleSheet("QPushButton {"
+                                  "    background-color: rgb(233, 233, 233);"
+                                  "    border: none;"
+                                  "}"
+                                  "QPushButton:hover {"
+                                  "    background-color: rgb(210, 210, 210);"
+                                  "}"
+                                  "QPushButton:pressed {"
+                                  "    background-color: rgb(198, 198, 198);"
+                                  "}");
 
-    //如果此时并没有建立好链接(丑陋的等待，但无伤大雅，顶多1s，你也可以优化成条件变量互斥量）
-    // while(!imageNetworkManager_.isConnect_){
-    //     std::cout<<"image connect ing"<<std::endl;
-    // }
-    std::unique_lock<std::mutex> lock(imageNetworkManager_.GetMutex());
-    imageNetworkManager_.GetCond().wait(lock, [this] { return imageNetworkManager_.isConnect_; }); // 等待连接建立
+    setUIStyle();
 
-    std::string http = imageNetworkManager_.as_HttpGetImageByUserId(userId_);
-    imageNetworkManager_.SendToImageServer(http);
-    imageNetworkManager_.RecvMyheadImageSrv();
-
-    //imageNetworkManager_.ListeningFromImageSrv();     在RecvMyhead函数回调中调用了
-
-
-    ui->listWidget->update(); // 更新列表
+    // 更新列表
+    ui->listWidget->update();
 
     //焦点设置于pushText
     ui->textEdit->setFocus();
@@ -71,28 +64,6 @@ void ChatWindow::on_toolButton_clicked()
     QApplication::quit();
 }
 
-void ChatWindow::mousePressEvent(QMouseEvent *event)
-{
-    isPressedWidget = true; // 当前鼠标按下的即是QWidget而非界面上布局的其它控件
-    last = event->globalPosition().toPoint(); // 使用 toPoint() 来转换 QPointF 到 QPoint
-}
-
-void ChatWindow::mouseMoveEvent(QMouseEvent *event)
-{
-    if (isPressedWidget)
-    {
-        QPoint delta = event->globalPosition().toPoint() - last;
-        last = event->globalPosition().toPoint();
-        move(x() + delta.x(), y() + delta.y());
-    }
-}
-
-void ChatWindow::mouseReleaseEvent(QMouseEvent *event)
-{
-    QPoint delta = event->globalPosition().toPoint() - last;
-    move(x() + delta.x(), y() + delta.y());
-    isPressedWidget = false; // 鼠标松开时，置为false
-}
 
 void ChatWindow::resizeEvent(QResizeEvent *event)
 {
@@ -104,15 +75,9 @@ void ChatWindow::resizeEvent(QResizeEvent *event)
 
 void ChatWindow::addMessage(const QString &text, const QString &time, QNChatMessage::User_Type userType,int addUserId) {
     // 创建一个新的 QNChatMessage
-    QNChatMessage *message = new QNChatMessage();
-
-    std::string http = imageNetworkManager_.as_HttpGetImageByUserId(addUserId);
-    imageNetworkManager_.SendToImageServer(http);
-    //发送该报文后，imageNetwork中的监听函数会即使emit信号更新youPic
-
-
-
-
+    QNChatMessage *message = new QNChatMessage(ui->listWidget);
+    message->setFixedWidth(ui->listWidget->width() -  ui->listWidget->contentsMargins().left()); // 为滚动条留出空间
+    // 该代码保证了qnchatmessage自身的wdith大小
     if(userType == QNChatMessage::User_Type::User_Me){
         message->SetHeaderImage(userType,myPic);
     }else if(userType == QNChatMessage::User_Type::User_She){
@@ -121,43 +86,118 @@ void ChatWindow::addMessage(const QString &text, const QString &time, QNChatMess
         qDebug()<<"SetHeaderImage Error";
     }
 
-
-    message->setText(text, time, QSize(), userType); // 设置文本，时间和用户类型
-
-    // 使用 fontRect 函数获取 QNChatMessage 控件的尺寸
+    message->setText(text, time, QSize(ui->listWidget->width(), 0), userType); // 设置文本，时间和用户类型
+    // 获取 QNChatMessage 控件的尺寸
     QSize messageSize = message->fontRect(text);
 
     // 创建一个 QListWidgetItem
     QListWidgetItem *item = new QListWidgetItem(ui->listWidget);
-    item->setSizeHint(messageSize ); // 设置大小提示为 QNChatMessage 的推荐大小
+    // 设置大小提示为 QNChatMessage 的推荐大小，并调整以适应 QListWidget 的宽度
+    item->setSizeHint(messageSize);
 
     // 将 QNChatMessage 添加到 QListWidget 中
     ui->listWidget->addItem(item);
     ui->listWidget->setItemWidget(item, message);
+
+    // 确保 QListWidget 滚动到新消息
+    ui->listWidget->scrollToBottom();
+
+    //与左侧会话栏cellviewson的lastMessage交互更新
+    if(addUserId == userId_){
+        emit messageAdded(toId_, text);
+    }else{
+        emit messageAdded(addUserId, text);
+    }
+
 }
 
 
-//将服务器读来内容借助addMessage同步到显示listwidget中
-void ChatWindow::displayReceivedData(const QString& data,int userId) {
 
-    addMessage(data, "12:00", QNChatMessage::User_She,userId);
 
-    //客户端从服务器读来文本信息的成功回调函数中
-    //emit发来的信息最好带user_id，
-    //先检索，如果存储地址已经有该user_id的头像了，那就不触发向服务器请求图像的逻辑，直接从本地应用
-    //如果本地没有，拼接写死的存储路径和user_id当作图片文件名做到将图片存储到本地
-}
+#if 0
+void ChatWindow::addMessage(const QString htmlContent, const QString time, QNChatMessage::User_Type userType, int addUserId) {
+    // 创建一个新的 QNChatMessage
+    QNChatMessage *message = new QNChatMessage(ui->listWidget);
+    message->setFixedWidth(ui->listWidget->width() - ui->listWidget->contentsMargins().left()); // 为滚动条留出空间
 
-//本槽函数，仅更新自身成员QPixmap myPic
-void ChatWindow::updateReceivedHeader(const QByteArray &headData)
-{
-    QPixmap pixmap;
-    if (pixmap.loadFromData(headData)) {
-        myPic = pixmap;
+    // 设置头像
+    if(userType == QNChatMessage::User_Type::User_Me){
+        message->SetHeaderImage(userType, myPic);
+    } else if(userType == QNChatMessage::User_Type::User_She){
+        message->SetHeaderImage(userType, youPic);
+    } else {
+        qDebug() << "SetHeaderImage Error";
+    }
 
+    // 使用新的 setHtml 方法
+    QSize qs =  QSize(ui->listWidget->width(), 0);
+    message->setHtml(htmlContent, time,qs, userType); // 设置 HTML 内容和用户类型
+
+    // 使用 QTextDocument 来计算 HTML 内容的尺寸
+    QTextDocument doc;
+    doc.setHtml(htmlContent);
+    doc.setTextWidth(ui->listWidget->width()); // 使用 QListWidget 的宽度作为文档的宽度
+    //QSize docSize(doc.idealWidth(), doc.size().height()); // 计算文档理想宽度和高度
+    QSize docSize = calculateDocumentSize(htmlContent);
+    qDebug()<<"HTML:"<<htmlContent;
+    qDebug()<<"NOW DOC SIZE:"<<docSize;
+    // 创建一个 QListWidgetItem 并设置大小提示
+    QListWidgetItem *item = new QListWidgetItem(ui->listWidget);
+    item->setSizeHint(docSize); // 使用文档大小设置大小提示
+
+    // 将 QNChatMessage 添加到 QListWidget 中
+    ui->listWidget->addItem(item);
+    ui->listWidget->setItemWidget(item, message);
+
+    // 确保 QListWidget 滚动到新消息
+    ui->listWidget->scrollToBottom();
+
+    // 更新左侧会话栏的最后一条消息
+    if(addUserId == userId_){
+        emit messageAdded(toId_, htmlContent);
+    } else {
+        emit messageAdded(addUserId, htmlContent);
     }
 }
 
+#endif
+
+
+
+QSize  ChatWindow::calculateDocumentSize(const QString &htmlContent)
+{
+    QTextDocument doc;
+    doc.setHtml(htmlContent);
+    doc.setDefaultFont(ui->listWidget->font()); // 尝试设置一个较大的默认字体
+
+    // 尝试固定宽度以测试尺寸计算
+    int fixedWidth = 300; // 临时宽度，用于测试
+    doc.setTextWidth(fixedWidth);
+
+    // 确保文档更新布局
+    QCoreApplication::processEvents();
+
+    // 计算理想尺寸
+    QSize docSize(doc.idealWidth(), static_cast<int>(doc.size().height()));
+
+    qDebug() << "Calculated doc size:" << docSize;
+    return docSize; // 返回文档的尺寸
+}
+
+
+/*废弃*/
+//本槽函数，仅更新自身成员QPixmap myPic
+void ChatWindow::updateReceivedHeader(const QByteArray &headData)
+{
+    //自身头像交付给clientwindow传入
+    // QPixmap pixmap;
+    // if (pixmap.loadFromData(headData)) {
+    //     myPic = pixmap;
+
+    // }
+}
+
+/*废弃*/
 //用于更新其他人的消息气泡头像
 void ChatWindow::updateReceivedImage(const QByteArray &imageData)
 {
@@ -177,6 +217,7 @@ bool ChatWindow::eventFilter(QObject *obj, QEvent *event) {
     if (obj == ui->textEdit && event->type() == QEvent::KeyPress) {
         QKeyEvent *keyEvent = static_cast<QKeyEvent *>(event);
         if (keyEvent->key() == Qt::Key_Return || keyEvent->key() == Qt::Key_Enter) {
+            qDebug()<<"我在event里";
             onTextEidtReturnPressed();
             return true; // 事件已处理
         }
@@ -190,16 +231,154 @@ void ChatWindow::onTextEidtReturnPressed(){
     QString text = ui->textEdit->toPlainText().trimmed();
     if (!text.isEmpty()) {
         // 同步显示到 listWidget 控件
+        //qDebug()<<"add之前";
         addMessage(text,"12:00",QNChatMessage::User_Me,this->userId_);
-
+        //qDebug()<<"add之后";
         // 使用 nlohmann::json 创建 JSON 对象
         nlohmann::json json;
         json["type"] = "message_text";
-        json["userid"] = this->userId_;
+        json["srcid"] = this->userId_;
+        json["destid"]= this->toId_;
         json["text"] = text.toStdString();
 
+        qDebug()<<"Send之前";
         chatNetworkManager_.SendToServer(json);
+
+        //此时json中text用cout出来会乱码，发给服务器是能正常读取
+        //qDebug()<<"客户端发给服务器的信息：";
+        std::cout<<json<<std::endl;
         // 清空发送框 textEdit 控件内容
         ui->textEdit->clear();
     }
+}
+
+#if 0
+void ChatWindow::onTextEidtReturnPressed(){
+    QString htmlContent = ui->textEdit->toHtml(); // 获取包含文本和图像的 HTML 内容
+    if (!htmlContent.isEmpty()) {
+        // 同步显示到 listWidget 控件
+        addMessage(htmlContent, "12:00", QNChatMessage::User_Me, this->userId_);
+
+        // 创建 JSON 对象
+        nlohmann::json json;
+        json["type"] = "message_html";
+        json["srcid"] = this->userId_;
+        json["destid"] = this->toId_;
+        json["text"] = htmlContent.toStdString(); // 发送 HTML 内容
+
+        // 发送 JSON 到服务器
+        qDebug()<<"Send之前";
+        chatNetworkManager_.SendToServer(json);
+
+        // 清空发送框 textEdit 控件内容
+        ui->textEdit->clear();
+    }
+}
+#endif
+void ChatWindow::setUIStyle(){
+    // 设置 listWidget 和 textEdit 的样式，使其拥有细微的灰色边缘线
+    QString subtleBorderStyle = "1px solid #dcdcdc"; // 可以调整颜色和宽度以更好地匹配您的UI风格
+
+    ui->listWidget->setStyleSheet(QString("QListWidget {"
+                                          "border: %1;"
+                                          "border-radius: 4px;" // 如果您想要圆角可以调整此值
+                                          "}").arg(subtleBorderStyle));
+
+    ui->textEdit->setStyleSheet(QString("QTextEdit {"
+                                        "border: %1;"
+                                        "border-radius: 4px;"
+                                        "}").arg(subtleBorderStyle));
+
+
+    chatName->setStyleSheet("QLabel {"
+                            "margin-left: 10px;" // 根据需要调整间距
+                            "color: black;" // 可以调整颜色
+                            "font-size: 26px;" // 字体大小
+                            "}");
+
+    // 设置 chatName(QLabel) 的位置和大小
+    chatName->setGeometry(ui->listWidget->geometry().x() - 10, ui->listWidget->geometry().y() - 40, ui->listWidget->width(), 35); // 根据需要调整高度和间距
+
+
+    //设置emoji，pic，file，screen的样式
+    QPixmap emojiPic(":/Icons/MainWindow/emoji.png");
+
+
+
+    QStringList tmp;
+    tmp << ":/Icons/MainWindow/emoji.png"
+        << ":/Icons/MainWindow/emoji2.png"
+        << ":/Icons/MainWindow/emoji.png";
+    emoji = new MyButton(this,tmp,QSize(25,25),NormalBtn);
+
+    emojiMenu = new QMenu(this);
+    EmojiPicker *picker = new EmojiPicker(this);
+    QWidgetAction *action = new QWidgetAction(emojiMenu);
+    action->setDefaultWidget(picker);
+    emojiMenu->addAction(action);
+
+    //某表情被选中后，添加到textEdit中
+    connect(picker, &EmojiPicker::emojiSelected, this, [this](const QString &imagePath){
+        // 创建 HTML 格式的图像标签，并插入到 QTextEdit
+        QString imgTag = QString("<img src='%1' />").arg(imagePath);
+        ui->textEdit->insertHtml(imgTag);
+
+        // 确保在插入图片后，textEdit 能继续输入文本
+        ui->textEdit->moveCursor(QTextCursor::End);
+    });
+
+    //emoji->setMenu(emojiMenu);  不采取直接setMenu的方式（会出现下拉框不美观且不够准确）
+    //连接emoji按钮点击信号与用于显示菜单的槽函数
+    connect(emoji, &QPushButton::clicked, this, [this]() {
+        //emojiMenu->exec(emoji->mapToGlobal(QPoint(0, emoji->height())));
+        // 获取按钮的位置
+        QPoint menuPos = emoji->mapToGlobal(QPoint(0, 0));
+        // 计算菜单的Y坐标，使其出现在按钮上方
+        int menuY = menuPos.y() - emojiMenu->sizeHint().height();
+        // 显示菜单
+        emojiMenu->exec(QPoint(menuPos.x(), menuY));
+    });
+
+    tmp.clear();
+    tmp << ":/Icons/MainWindow/picture.png"
+        << ":/Icons/MainWindow/picture2.png"
+        << ":/Icons/MainWindow/picture.png";
+    picture = new MyButton(this,tmp,QSize(25,25),NormalBtn);
+
+    tmp.clear();
+    tmp << ":/Icons/MainWindow/file.png"
+        << ":/Icons/MainWindow/file2.png"
+        << ":/Icons/MainWindow/file.png";
+    file = new MyButton(this,tmp,QSize(25,25),NormalBtn);
+
+    tmp.clear();
+    tmp << ":/Icons/MainWindow/screenshot.png"
+        << ":/Icons/MainWindow/screenshot2.png"
+        << ":/Icons/MainWindow/screenshot.png";
+    screenshot = new MyButton(this,tmp,QSize(25,25),NormalBtn);
+
+    // 由于textEdit和listWidget历史原因是ui设计，所以不方便在使用布局
+    // 转而采用像素位置
+    int x = 5; // 按钮的起始X坐标
+    int y = ui->listWidget->geometry().bottom() + 10; // listWidget的底部往下10个像素
+    int buttonWidth = 25; // 按钮宽度
+    int buttonHeight = 25; // 按钮高度
+    int padding = 5; // 按钮之间的间距
+
+    qDebug()<<"x = 10, y = "<<y;
+
+    emoji->setGeometry(x, y, buttonWidth, buttonHeight);
+    x += buttonWidth + padding; // 更新x坐标，为下一个按钮留出空间
+
+    picture->setGeometry(x, y, buttonWidth, buttonHeight);
+    x += buttonWidth + padding;
+
+    file->setGeometry(x, y, buttonWidth, buttonHeight);
+    x += buttonWidth + padding;
+
+    screenshot->setGeometry(x, y, buttonWidth, buttonHeight);
+
+
+
+
 }

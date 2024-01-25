@@ -32,6 +32,9 @@ public:
     void setTextSuccess();
     void setText(QString text, QString time, QSize allSize, User_Type userType);
 
+    void setHtml(const QString &htmlContent, const QString &time, QSize allSize, User_Type userType);
+    void updateGeometry();
+
     QSize getRealString(QString src);
     QSize fontRect(QString str);
 
@@ -45,6 +48,9 @@ protected:
     void paintEvent(QPaintEvent *event) override;
 private:
     QString m_msg;
+    //new demo new html
+    QString m_htmlContent;
+
     QString m_time;
     QString m_curTime;
 

@@ -6,11 +6,13 @@ set(CMAKE_AUTOUIC ON)
 set(CMAKE_AUTOMOC ON)
 set(CMAKE_AUTORCC ON)
 
+set(CMAKE_INCLUDE_CURRENT_DIR ON)
+
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
-find_package(QT NAMES Qt6 Qt5 REQUIRED COMPONENTS Widgets LinguistTools)
-find_package(Qt${QT_VERSION_MAJOR} REQUIRED COMPONENTS Widgets LinguistTools)
+find_package(QT NAMES Qt6 Qt5 REQUIRED COMPONENTS Widgets LinguistTools Sql)
+find_package(Qt${QT_VERSION_MAJOR} REQUIRED COMPONENTS Widgets LinguistTools Sql)
 
 set(TS_FILES MychatClient_yue_CN.ts)
 
@@ -59,7 +61,22 @@ if(${QT_VERSION_MAJOR} GREATER_EQUAL 6)
         chatwindow/bubbleinfo.h chatwindow/bubbleinfo.cpp
         chatwindow/bubbleitemwidget.h chatwindow/bubbleitemwidget.cpp
         chatwindow/qnchatmessage.h chatwindow/qnchatmessage.cpp
-        clientwindow.h clientwindow.cpp clientwindow.ui
+        clientwindow.h clientwindow.cpp
+        chatsession/cell.h chatsession/cell.cpp
+        chatsession/listwidget.h chatsession/listwidget.cpp
+        chatsession/floatingscrollbar.h chatsession/floatingscrollbar.cpp
+        chatsession/cellviewdad.h chatsession/cellviewdad.cpp
+        chatsession/cellviewson.h chatsession/cellviewson.cpp
+        base/roundlabel.h base/roundlabel.cpp
+        clientapi/myapplication.h clientapi/myapplication.cpp
+        clientapi/status.h clientapi/status.cpp
+        sqlite/sqldatabase.h sqlite/sqldatabase.cpp
+        myconfig.h myconfig.cpp
+        base/mybutton.h base/mybutton.cpp
+        base/searchbar.h base/searchbar.cpp
+        leftmenu/leftbar.h leftmenu/leftbar.cpp
+        base/emojipicker.h base/emojipicker.cpp
+
     )
 # Define target properties for Android with Qt 6 as:
 #    set_property(TARGET MychatClient APPEND PROPERTY QT_ANDROID_PACKAGE_SOURCE_DIR
@@ -83,7 +100,7 @@ else()
     qt5_create_translation(QM_FILES ${CMAKE_SOURCE_DIR} ${TS_FILES})
 endif()
 
-target_link_libraries(MychatClient PRIVATE Qt${QT_VERSION_MAJOR}::Widgets)
+target_link_libraries(MychatClient PRIVATE Qt${QT_VERSION_MAJOR}::Widgets Qt${QT_VERSION_MAJOR}::Sql)
 
 
 target_link_libraries(MychatClient PRIVATE dwmapi)

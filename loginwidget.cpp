@@ -1,5 +1,7 @@
 #include "loginwidget.h"
 #include "chatwindow/chatwindow.h"
+#include "clientwindow.h"
+#include "sqlite/sqldatabase.h"
 
 #include "ui_loginwidget.h"
 
@@ -25,11 +27,17 @@ LoginWidget::LoginWidget(QWidget *parent)
     this->CreatHeadPic();
     this->CreatLogo();
     //连接服务器
+#ifdef _RELEASE
+    networkManager_.ConnectToServer("122.51.38.77","23610");
+#else
     networkManager_.ConnectToServer("172.30.229.221","23610");
+#endif
 
     //绑定信号与槽
     //connect(&networkManager_, &NetworkManager::dataReceived, this, &MainWindow::displayReceivedData);
     connect(&networkManager_, &NetworkManager::loginResponseReceived,this, &LoginWidget::onLoginResponseReceived);
+    connect(&networkManager_, &NetworkManager::loginResponseReceivedWithFriends,
+            this, &LoginWidget::onLoginResponseReceivedWithFriends);
 }
 
 LoginWidget::~LoginWidget()
@@ -76,7 +84,7 @@ void LoginWidget::CreatHeadPic()
 {
     // 加载原始图片
     QPixmap originalPixmap(":/Sulli.jpg");
-
+    QPixmap x(":/Icons/MainWindow/close.png");
     // 确保图片已经加载
     if(originalPixmap.isNull()) {
         qDebug() << "图片加载失败";
@@ -182,27 +190,86 @@ void LoginWidget::on_pushButton_clicked()
 
 //networkManager登录核验成功后发射信号调用该槽函数,int不能传&，信号要求可存储与复制
 void LoginWidget::onLoginResponseReceived(bool success, const QString& message,int user_id) {
-    std::cout<<"into onLoginResponseReceived"<<std::endl;
+    std::cout<<"into nofriend recv"<<std::endl;
     if (success) {
-        // 登录成功，创建并显示新的业务窗口
-        // auto businessWindow = new BusinessWidget(); // 假设 BusinessWindow 是业务窗口的类
-        // businessWindow->show();
-
-        auto chatwindow = new ChatWindow(std::move(networkManager_.GetSocket()),user_id);
-        QIcon icon(":/chatApp.ico");
-
-        //debug_用
+        //身份核验通过后，创建属于该用户的本地数据库
+        SqlDataBase::Instance()->openDb(user_id);
 
 
-        chatwindow->setWindowTitle("Mychat");
-        chatwindow->setWindowIcon(icon);
+        ClientWindow* cli = new ClientWindow(std::move(networkManager_.GetSocket()), user_id);
 
-        chatwindow->show();
+        cli->show();
 
-        // 关闭登录窗口
+
         this->close();
     } else {
         // 登录失败，显示错误信息
         QMessageBox::warning(this, "Login Failed", message);
     }
 }
+
+
+/*
+    if (responseJson.contains("friends") && responseJson["friends"].is_array()) {
+        auto friendsJson = responseJson["friends"];
+
+        for (const auto& friendJson : friendsJson) {
+            std::cout << "Friend ID: " << friendJson.value("friend_id", 0) << std::endl;
+            if (friendJson.contains("markname") && !friendJson["markname"].is_null()) {
+                std::cout << "Markname: " << friendJson["markname"].get<std::string>() << std::endl;
+            } else {
+                std::cout << "Markname is missing or null" << std::endl;
+            }
+            if (friendJson.contains("teamname") && !friendJson["teamname"].is_null()) {
+                std::cout << "Teamname: " << friendJson["teamname"].get<std::string>() << std::endl;
+            } else {
+                std::cout << "Teamname is missing or null" << std::endl;
+            }
+        }
+    }
+*/
+void LoginWidget::onLoginResponseReceivedWithFriends(bool success, const QString& message,
+                                                     int user_id, const nlohmann::json& friends) {
+    std::cout << "into ReceivedWithFriends" << std::endl;
+    if (success) {
+        // 身份核验通过后，创建属于该用户的本地数据库
+        SqlDataBase::Instance()->openDb(user_id);
+        qDebug() << "Processing friends data...";
+
+        // 遍历并打印好友信息
+        for (const auto& friendJson : friends) {
+            qDebug() << "Friend JSON:" << QString::fromStdString(friendJson.dump());
+
+            try {
+                int friendID = friendJson["friend_id"].get<int>();
+                //暂用markname顶替name
+                QString name = QString::fromStdString(friendJson["markname"]);
+                QString teamname = QString::fromStdString(friendJson["teamname"]);
+                QString markname = QString::fromStdString(friendJson["markname"]);
+
+                qDebug() << "Friend ID:" << friendID << ", Name:" << name << ", Teamname:" << teamname << ", Markname:" << markname;
+
+                // 将好友信息添加到数据库
+                SqlDataBase::Instance()->addFriend(user_id, friendID, name, teamname, markname);
+            } catch (const std::exception& e) {
+                qDebug() << "Error parsing friend JSON:" << e.what();
+            }
+
+
+        }
+        // 创建并显示客户端窗口
+        ClientWindow* cli = new ClientWindow(std::move(networkManager_.GetSocket()), user_id);
+        cli->show();
+
+        this->close();
+    }
+     else {
+        // 显示错误信息
+        std::cerr << "Login failed: " << message.toStdString() << std::endl;
+    }
+}
+
+
+
+
+

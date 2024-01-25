@@ -1,7 +1,7 @@
 #include "mainwindow.h"
 #include "loginwidget.h"
-#include "chatwindow/chatwindow.h"
 
+#include"myconfig.h"
 
 #include <QApplication>
 #include <QLocale>
@@ -25,6 +25,13 @@ int main(int argc, char *argv[])
     QApplication::setQuitOnLastWindowClosed(false);
 
 
+    //初始化一切配置
+    MyConfig::InitMyConfig(a.applicationDirPath());
+    //database的创建移交给login，每个user有自己的db
+    //SqlDataBase::Instance()->openDb(MyConfig::strDatabasePath + "user.db");
+    //SqlDataBase::Instance()->openDb(1004);
+
+    //显示登陆界面
      LoginWidget login;
      login.show();
 

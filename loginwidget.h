@@ -2,7 +2,6 @@
 #define LOGINWIDGET_H
 
 #include "networkmanager.h"
-#include "businesswidget.h"
 
 //debug messagebox
 #include <QMessageBox>
@@ -54,6 +53,11 @@ private slots:
     void on_pushButton_clicked();
 
     void onLoginResponseReceived(bool success, const QString& message,int user_id);
+
+    void onLoginResponseReceivedWithFriends
+        (bool success, const QString& message,
+         int user_id, const nlohmann::json& friends);
+
 protected:
 
 
@@ -66,6 +70,8 @@ private:
     bool isPressedWidget;
     QPoint last;
     NetworkManager networkManager_;
+
+    bool haveDB;
 
     void CreatHeadPic();
     void CreatBackgroud();

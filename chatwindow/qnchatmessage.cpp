@@ -10,7 +10,6 @@
 QNChatMessage::QNChatMessage(QWidget *parent)
 : QWidget(parent)
 {
-
     QFont te_font = this->font();
     te_font.setFamily("MicrosoftYaHei");
     te_font.setPointSize(12);
@@ -96,9 +95,11 @@ void QNChatMessage::setText(QString text, QString time, QSize allSize, QNChatMes
     this->update();
 }
 
+
+
 QSize QNChatMessage::fontRect(QString str)
 {
-
+    qDebug()<<"debug--------"<<this->width();
     m_msg = str;
     int minHei = 30;
     int iconWH = 40;
@@ -190,6 +191,51 @@ QSize QNChatMessage::getRealString(QString src)
     }
     return QSize(nMaxWidth+m_spaceWid, (nCount + 1) * m_lineHeight+2*m_lineHeight);
 }
+
+
+
+#if 0
+#include <qglobal.h>
+
+QSize QNChatMessage::fontRect(const QString content)
+{
+    int minHei = 30;
+    int iconWH = 40;
+    int iconSpaceW = 20;
+    int iconRectW = 5;
+    int iconTMPH = 10;
+    int sanJiaoW = 6;
+    int kuangTMP = 20;
+    int textSpaceRect = 12;
+
+    QTextDocument doc;
+    doc.setHtml(content);
+    doc.setDefaultFont(this->font());
+    doc.setTextWidth(this->width() - (iconWH + iconSpaceW + iconRectW) * 2 - kuangTMP); // 设置文本宽度
+
+    int newWidth = qMin(static_cast<int>(doc.idealWidth()), this->width() - (iconWH + iconSpaceW + iconRectW) * 2 - kuangTMP);
+    int newHeight = static_cast<int>(doc.size().height());
+
+    // 更新其他布局相关的成员变量
+    m_iconLeftRect = QRect(iconSpaceW, iconTMPH, iconWH, iconWH);
+    m_iconRightRect = QRect(this->width() - iconSpaceW - iconWH, iconTMPH, iconWH, iconWH);
+    m_kuangWidth = newWidth;
+    m_textWidth = newWidth - 2 * textSpaceRect;
+
+    m_sanjiaoLeftRect = QRect(iconWH + iconSpaceW + iconRectW, newHeight / 2, sanJiaoW, newHeight / 2);
+    m_sanjiaoRightRect = QRect(this->width() - iconRectW - iconWH - iconSpaceW - sanJiaoW, newHeight / 2, sanJiaoW, newHeight / 2);
+
+    m_kuangLeftRect = QRect(m_sanjiaoLeftRect.x() + m_sanjiaoLeftRect.width(), iconTMPH, m_kuangWidth, newHeight - iconTMPH * 2);
+    m_kuangRightRect = QRect(this->width() - m_kuangWidth - iconWH - iconSpaceW - iconRectW - sanJiaoW, iconTMPH, m_kuangWidth, newHeight - iconTMPH * 2);
+
+    m_textLeftRect = QRect(m_kuangLeftRect.x() + textSpaceRect, m_kuangLeftRect.y() + iconTMPH, m_kuangLeftRect.width() - 2 * textSpaceRect, m_kuangLeftRect.height() - 2 * iconTMPH);
+    m_textRightRect = QRect(m_kuangRightRect.x() + textSpaceRect, m_kuangRightRect.y() + iconTMPH, m_kuangRightRect.width() - 2 * textSpaceRect, m_kuangRightRect.height() - 2 * iconTMPH);
+
+    // 返回计算出的文本区域的大小
+    return QSize(newWidth, newHeight);
+}
+#endif
+
 
 void QNChatMessage::paintEvent(QPaintEvent *event)
 {
@@ -292,3 +338,113 @@ void QNChatMessage::paintEvent(QPaintEvent *event)
         painter.drawText(this->rect(),m_curTime,option);
     }
 }
+
+#if 0
+void QNChatMessage::paintEvent(QPaintEvent *event)
+{
+    qDebug() << "paintEvent called";
+
+    Q_UNUSED(event);
+
+
+
+
+    QPainter painter(this);
+    painter.setRenderHints(QPainter::Antialiasing | QPainter::SmoothPixmapTransform);//消锯齿
+    painter.setPen(Qt::NoPen);
+    painter.setBrush(QBrush(Qt::gray));
+
+    if(m_userType == User_Type::User_She) {
+        // 用户
+        //头像
+        // painter.drawRoundedRect(m_iconLeftRect,m_iconLeftRect.width(),m_iconLeftRect.height());
+        painter.drawPixmap(m_iconLeftRect, m_leftPixmap);
+
+        //框加边
+        QColor col_KuangB(234, 234, 234);
+        painter.setBrush(QBrush(col_KuangB));
+        painter.drawRoundedRect(m_kuangLeftRect.x()-1,m_kuangLeftRect.y()-1,m_kuangLeftRect.width()+2,m_kuangLeftRect.height()+2,4,4);
+        //框
+        QColor col_Kuang(255,255,255);
+        painter.setBrush(QBrush(col_Kuang));
+        painter.drawRoundedRect(m_kuangLeftRect,4,4);
+
+        //三角
+        QPointF points[3] = {
+
+            QPointF(m_sanjiaoLeftRect.x(), 30),
+            QPointF(m_sanjiaoLeftRect.x()+m_sanjiaoLeftRect.width(), 25),
+            QPointF(m_sanjiaoLeftRect.x()+m_sanjiaoLeftRect.width(), 35),
+        };
+        QPen pen;
+        pen.setColor(col_Kuang);
+        painter.setPen(pen);
+        painter.drawPolygon(points, 3);
+
+        //三角加边
+        QPen penSanJiaoBian;
+        penSanJiaoBian.setColor(col_KuangB);
+        painter.setPen(penSanJiaoBian);
+        painter.drawLine(QPointF(m_sanjiaoLeftRect.x() - 1, 30), QPointF(m_sanjiaoLeftRect.x()+m_sanjiaoLeftRect.width(), 24));
+        painter.drawLine(QPointF(m_sanjiaoLeftRect.x() - 1, 30), QPointF(m_sanjiaoLeftRect.x()+m_sanjiaoLeftRect.width(), 36));
+
+        // 绘制富文本内容
+        QTextDocument doc;
+        doc.setDefaultFont(painter.font());
+        doc.setHtml(m_htmlContent);
+        QRect textRect = m_userType == User_Type::User_Me ? m_textRightRect : m_textLeftRect;
+        painter.save();
+        painter.translate(textRect.topLeft());
+        doc.setTextWidth(textRect.width());
+        doc.drawContents(&painter);
+        painter.restore();
+    }  else if(m_userType == User_Type::User_Me) {
+        // 自己
+        //头像
+        // painter.drawRoundedRect(m_iconRightRect,m_iconRightRect.width(),m_iconRightRect.height());
+        painter.drawPixmap(m_iconRightRect, m_rightPixmap);
+
+        //框
+        QColor col_Kuang(75,164,242);
+        painter.setBrush(QBrush(col_Kuang));
+        painter.drawRoundedRect(m_kuangRightRect,4,4);
+
+        //三角
+        QPointF points[3] = {
+
+            QPointF(m_sanjiaoRightRect.x()+m_sanjiaoRightRect.width(), 30),
+            QPointF(m_sanjiaoRightRect.x(), 25),
+            QPointF(m_sanjiaoRightRect.x(), 35),
+        };
+        QPen pen;
+        pen.setColor(col_Kuang);
+        painter.setPen(pen);
+        painter.drawPolygon(points, 3);
+
+        // 绘制富文本内容
+        QTextDocument doc;
+        doc.setDefaultFont(painter.font());
+        doc.setHtml(m_htmlContent);
+        QRect textRect = m_userType == User_Type::User_Me ? m_textRightRect : m_textLeftRect;
+        painter.save();
+        painter.translate(textRect.topLeft());
+        doc.setTextWidth(textRect.width());
+        doc.drawContents(&painter);
+        painter.restore();
+
+    }  else if(m_userType == User_Type::User_Time) {
+        // 时间
+        QPen penText;
+        penText.setColor(QColor(153,153,153));
+        painter.setPen(penText);
+        QTextOption option(Qt::AlignCenter);
+        option.setWrapMode(QTextOption::WrapAtWordBoundaryOrAnywhere);
+        QFont te_font = this->font();
+        te_font.setFamily("MicrosoftYaHei");
+        te_font.setPointSize(10);
+        painter.setFont(te_font);
+        painter.drawText(this->rect(),m_curTime,option);
+    }
+}
+
+#endif

@@ -85,6 +85,8 @@ public:
     void addMessage(const QString &text, const QString &time, QNChatMessage::User_Type userType,int addUserId);
     //void addMessage(const QString text, const QString time, QNChatMessage::User_Type userType,int addUserId);
 
+    void addX();
+
     QSize  calculateDocumentSize(const QString& html);
 
     void setUIStyle();

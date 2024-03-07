@@ -26,6 +26,13 @@ public:
         User_Time,  //时间
     };
 
+    enum Msg_Type{
+        Msg_Null,
+        Msg_Text,
+        Msg_Image,
+        Msg_File
+    };
+
     void SetHeaderImage(User_Type userType,QPixmap& headerPic);
 
 
@@ -56,6 +63,7 @@ private:
 
     QSize m_allSize;
     User_Type m_userType = User_System;
+    Msg_Type m_msgType   = Msg_Null;
 
     int m_kuangWidth;
     int m_textWidth;

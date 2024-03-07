@@ -111,6 +111,26 @@ void ChatWindow::addMessage(const QString &text, const QString &time, QNChatMess
 
 }
 
+void ChatWindow::addX()
+{
+    // 初始化一个简单的 HTML 字符串
+    const QString htmlStr = "<html><body><h1>Hello, World!</h1><p>This is a <b>test</b> HTML string.</p></body></html>";
+
+    // 创建一个 QLabel 来显示 HTML
+    QLabel *label = new QLabel(this);
+    label->setText(htmlStr);
+    label->setTextFormat(Qt::RichText); // 确保 QLabel 以富文本格式显示内容
+    label->setWordWrap(true); // 如果需要，启用自动换行
+
+    // 设置 QLabel 的一些其他属性，例如大小和位置
+    label->setGeometry(10, 10, 300, 100); // 根据需要调整大小和位置
+
+    // 显示 QLabel
+    label->show();
+
+
+}
+
 
 
 

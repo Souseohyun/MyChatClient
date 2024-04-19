@@ -2,6 +2,7 @@
 
 ListWidget::ListWidget(QWidget* parent,int tag)
 :QListWidget(parent),tag(tag){
+
     this->setVerticalScrollMode(QListWidget::ScrollPerPixel);
     //    this->verticalScrollBar()->setSingleStep(10);
     this->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
@@ -24,6 +25,11 @@ ListWidget::ListWidget(QWidget* parent,int tag)
 
 }
 
+QList<Cell *> ListWidget::GetAllCells()
+{
+    return this->cells;
+}
+
 //获取右击选中的格子
 Cell *ListWidget::GetRightClickedCell()
 {
@@ -32,11 +38,14 @@ Cell *ListWidget::GetRightClickedCell()
 
 void ListWidget::insertCell(Cell *cell)
 {
+    qDebug()<<"I AM INTO insertCell";
     if(cell->type == Cell_GroupDrawer || cell->type == Cell_FriendDrawer){
         cells.append(cell);
     }else if(cell->type == Cell_FriendContact || cell->type == Cell_GroupContact){
         if(tag == 2){
+            qDebug()<<"I AM INTO insertCell tag == 2:";
             foreach(Cell *group,cells){
+                qDebug()<<"I GOT THE SUBGROUP";
                 if(!group->groupName.compare(cell->groupName)){
                     group->childs.append(cell);
                     break;
@@ -79,6 +88,7 @@ void ListWidget::RemoveCell(Cell *cell)
     refreshList();
 }
 
+//仅聊天列表
 void ListWidget::RemoveAllCells()
 {
     if(tag == 0){
@@ -101,6 +111,7 @@ void ListWidget::setDadPopMenu(QMenu *menu)
 
 void ListWidget::setSonPopMenu(QMenu *menu)
 {
+    qDebug()<<"into List SetSonPopMenu";
     cellSonMenu = menu;
 }
 
@@ -113,7 +124,7 @@ void ListWidget::refreshList()
     sonItems.clear();
     for(Cell *cell : cells){
         if(cell->type == Cell_GroupDrawer || cell->type == Cell_FriendDrawer) {
-
+            qDebug() << "Processing Drawer - Name:" << cell->groupName << "Is Open:" << cell->isOpen;
             CellViewDad *group = new CellViewDad();
             group->setGeometry(0,0,310,30);
             if(cell->type == Cell_FriendDrawer){
@@ -134,10 +145,11 @@ void ListWidget::refreshList()
             group->setCell(cell);//cell中封装的是数据，CellView负责显示，此处是把数据传递给界面显示
             group->setPopMenu(cellDadMenu);
 
-            connect(group,SIGNAL(onOpenStatusChanged(CellViewDad *)),
-                    this,SLOT(onDadOpenChanged(CellViewDad *)));
-            connect(group,SIGNAL(onPopMenuToShow(Cell *, QMenu *)),
-                    this,SIGNAL(popMenuToShow(Cell *, QMenu *)));
+            connect(group, &CellViewDad::onOpenStatusChanged,
+                    this, &ListWidget::onDadOpenChanged);
+            //链接俩信号-->信号转发，不处理on信号，包装成pop信号转发走
+            connect(group, &CellViewDad::onPopMenuToShow,
+                    this, &ListWidget::popMenuToShow);
 
             QListWidgetItem *item = new QListWidgetItem("");
             item->setBackground(QBrush(QColor(235, 234, 232)));
@@ -147,16 +159,23 @@ void ListWidget::refreshList()
 
             //如果抽屉被打开的话则显示下面的格子
             if(cell->isOpen){
+                qDebug()<<"__DEBUG FOR CELL->CHILDS COUNT : "<<cell->childs.count();
                 //先加载在线好友
                 for(Cell *c : cell->childs){
                     if(c->status == Status::OnLine)
+                    {
+                        qDebug()<<"ONLINE";
                         addSonItem(c);
+                    }
                 }
 
                 //再加载离线好友
                 for(Cell *c : cell->childs){
-                    if(c->status == Status::OffLine)
+                    if(c->status == Status::OffLine){
+                        qDebug()<<"OFFLINE";
                         addSonItem(c);
+                    }
+
                 }
             }
         }
@@ -186,35 +205,39 @@ void ListWidget::UpdateThisCellDisplay(Cell *cellToUpdate)
 void ListWidget::addSonItem(Cell *cell)
 {
     //此处为手操代码，可能引发冲突，随时待删 确保 Cell 对象被添加到 cells 成员中
+    /*
     if (!cells.contains(cell)) {
         cells.append(cell);
     }
-
+*/
     CellViewSon *son = new CellViewSon(nullptr,cell,tag);
-
+    //cellviewson类型（tag）不同，她们ui的尺寸也不同
     if(tag == 0 || tag == 2)
         son->setGeometry(0,0,350,60);
     else if(tag == 1)
         son->setGeometry(0,0,200,40);
-    son->setPopMenu(cellSonMenu);
+    son->setPopMenu(cellSonMenu);//设置了一个右键菜单
     sonItems.append(son);
-
+//cells.append(cell);
     //槽连接，消息传递给上层类进行具体处理
 
 
-    connect(son,SIGNAL(onSelected(Cell *)),
-            this,SLOT(onSonSelected(Cell *)));//单元格被单击选中
-    connect(son,SIGNAL(onRightClicked(Cell *)),
-            this,SLOT(onCellRightClicked(Cell *)));
-    connect(son,SIGNAL(onPopMenuToShow(Cell *, QMenu *)),
-            this,SIGNAL(popMenuToShow(Cell *, QMenu *)));
-    connect(son,SIGNAL(onDoubleClicked(Cell *)),
-            this,SIGNAL(sonDoubleClicked(Cell *)));
+    connect(son, &CellViewSon::onSelected,
+            this, &ListWidget::onSonSelected); // 单元格被单击选中
+    connect(son, &CellViewSon::onRightClicked,
+            this, &ListWidget::onCellRightClicked); // 单元格被右击
+    connect(son, &CellViewSon::onPopMenuToShow,
+            this, &ListWidget::popMenuToShow); // 发出右键菜单请求
+    connect(son, &CellViewSon::onDoubleClicked,
+            this, &ListWidget::sonDoubleClicked); // 单元格被双击
 
     QListWidgetItem *item = new QListWidgetItem("");
     this->addItem(item);
     this->setItemWidget(item,son);
     item->setSizeHint(son->geometry().size());
+
+    qDebug() << "ListWidget::addSonItem - Adding Cell:" << cell->name << "Status:" << (int)cell->status;
+
 
 }
 
@@ -320,14 +343,17 @@ void ListWidget::changeSonSelectionState(Cell *c)
 
 void ListWidget::onDadOpenChanged(CellViewDad* dad)
 {
+    qDebug() << "ListWidget::onDadOpenChanged - Cell Open Status:" << dad->cell->isOpen;
+
     int cnt = dad->cell->childs.size();
     for(int i = 0;i < cnt;i++){
-        dad->cell->childs.at(i)->isClicked = false;
+        //源代码是=false;
+        dad->cell->childs.at(i)->isClicked = false;//每一个子项的isClicked为false
     }
     refreshList();
 }
 
-//右键选中listwidget中的某个sonitem后,cell为选中soncell信息
+//左键选中listwidget中的某个sonitem后,cell为选中soncell信息
 void ListWidget::onSonSelected(Cell *cell)
 {
     //qDebug()<<"into onSonSelected............";

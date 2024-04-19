@@ -48,11 +48,13 @@ void CellViewDad::mousePressEvent(QMouseEvent *e)
         if(cell->isOpen) iconLabel->setPixmap(QPixmap(":/Icons/MainWindow/arrowDown.png").scaled(iconLabel->size(),Qt::IgnoreAspectRatio,Qt::SmoothTransformation));
         else iconLabel->setPixmap(QPixmap(":/Icons/MainWindow/arrowRight.png").scaled(iconLabel->size(),Qt::IgnoreAspectRatio,Qt::SmoothTransformation));
         qDebug() << "LeftBtn clicked on viewdad:" << cell->id << cell->name;
+        qDebug() << "CellViewDad::mousePressEvent - Cell Open Status:" << cell->isOpen;
 
         emit onOpenStatusChanged(this);
     }else if(e->button() == Qt::RightButton){
         if(popMenu == nullptr) return;
         qDebug() << "RightBtn clicked on viewdad:" << cell->id << cell->name;
+
         emit onPopMenuToShow(cell,popMenu);
         popMenu->exec(QCursor::pos());//在光标位置弹出右键菜单
     }

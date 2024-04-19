@@ -1,5 +1,8 @@
 #include "networkmanager.h"
 //不传参，默认设置iocontext
+#include <QTimer>
+#include <QApplication>
+
 NetworkManager::NetworkManager() :socket_(GetIOC()),strand_(GetIOC().get_executor()),testBuff_(1024){}
 
 NetworkManager::NetworkManager(boost::asio::ip::tcp::socket socket)
@@ -160,11 +163,15 @@ void NetworkManager::SendToServer(const nlohmann::json& jsonMessage){
     // 将字符串转换为 QByteArray
     QByteArray data = QByteArray::fromStdString(message);
 
+    //QByteArray data = QByteArray::fromStdString("messageX");
+
     // 异步发送数据
     boost::asio::async_write(socket_, boost::asio::buffer(data.data(), data.size()),
-                             [this](boost::system::error_code ec, std::size_t /*length*/) {
+                             [this,&jsonMessage](boost::system::error_code ec, std::size_t /*length*/) {
                                  if (!ec) {
                                      // 数据成功发送
+                                     std::cout<<"write to server end."<<std::endl;
+
                                  } else {
                                      // 发生错误，可能需要进行错误处理
                                  }
@@ -213,19 +220,62 @@ void NetworkManager::ProcessServerResponse(const std::string &responseData) {
     std::string message = responseJson["message"];
     int user_id = responseJson["user_id"];
 
+
+    if (responseJson.contains("msgResponse") && responseJson["msgResponse"].is_object()) {
+        // 访问 msgResponse 对象
+        auto msgResponseObj = responseJson["msgResponse"];
+        if (msgResponseObj.contains("notreadmessage") && msgResponseObj["notreadmessage"].is_array()) {
+            // 提取 notreadmessage 数组
+            auto msgJson = msgResponseObj["notreadmessage"];
+
+            emit msgResponseReceived(user_id, msgJson);
+        }
+    }
+
+
     // 检查是否有好友信息
     if (responseJson.contains("friends") && responseJson["friends"].is_array()) {
         auto friendsJson = responseJson["friends"];
-
-
         // 发送包含好友信息的信号
         emit loginResponseReceivedWithFriends(success, QString::fromStdString(message), user_id, friendsJson);
+
+
 
     } else {
         // 如果没有好友信息，只发送基本登录响应
         emit loginResponseReceived(success, QString::fromStdString(message), user_id);
 
     }
+    qDebug()<<"进入了login后";
+    // 检查是否有通知信息
+    if (responseJson.contains("ntfResponse") && responseJson["ntfResponse"].is_object()) {
+        qDebug()<<"进入一层";
+        auto ntfResponseObj = responseJson["ntfResponse"];
+        if (ntfResponseObj.contains("notifications") && ntfResponseObj["notifications"].is_array()) {
+            qDebug()<<"进入二层";
+            // 提取 notifications 数组
+            auto notificationsJson = ntfResponseObj["notifications"];
+
+            for (const auto& notificationJson : notificationsJson) {
+                GlobalStorage::addNotification(notificationJson);       //真是为了这醋做了这盘饺子，希望后续能多用GlobalStorage
+
+            }
+
+
+        }
+    }
+
+//不能匹配到一个键后，直接在用[]得到里面的数组键，还需要赋值，在匹配一次
+/*
+    if (responseJson.contains("msgResponse") && responseJson["msgResponse"].is_array()) {
+        auto msgJson = responseJson["notreadmessage"];
+
+        emit msgResponseReceived(user_id,msgJson);
+    }
+*/
+
+
+
 }
 
 /*
@@ -277,14 +327,57 @@ void NetworkManager::HandleReceivedData(const nlohmann::json &data)
     std::string type = data.value("type", "");
     if (type == "message_text") {
         // 处理文本消息
-        std::string textMessage = data.value("data", "");
+        std::string html = data.value("data", "");
         int         srcid      = data.value("srcid",0);
         int         destid     = data.value("destid",0);
 
-        // 发射信号,提示clientwindow找到合适的chatwindow进行显示
-        emit messageReceived(QString::fromStdString(textMessage),srcid,destid);
 
+        //从html剥离出text，只进行简单剥离p标签内容
+        QTextDocument textDoc;
+        textDoc.setHtml(QString::fromStdString(html));
+        //该函数只会单纯的返回全部纯文本内容
+        QString plainText = textDoc.toPlainText();
+        // 发射信号,提示clientwindow找到合适的chatwindow进行显示
+        emit messageReceived(QString::fromStdString(html),plainText,srcid,destid);
+
+        qDebug()<<"__Debug: plainText "<<plainText;
         //最后再调用Listen一直监听
+        ListeningFromChatSrv();
+    }else if(type == "search_result"){
+        //处理服务器发回的查询结果
+        //服务器返回用户信息UserInfo
+        emit SearchReceived(data);
+
+        ListeningFromChatSrv();
+
+    }else if(type == "addfriend"){
+        //别人请求我的好友
+        qDebug()<<"有人请求我的好友";
+
+        //好友的最后一步逻辑，显示这个请求
+        emit addFriendReceived(data);
+
+        ListeningFromChatSrv();
+    }else if(type == "addfriendreply"){
+        //您的好友请求已经得到了回应
+        qDebug()<<"您的好友请求，对方做出了回应";
+
+        //通知client处理对方回应是yesorno
+        emit addFriendReplyReceived(data);
+
+        ListeningFromChatSrv();
+
+    }else if(type == "registerreply"){
+        qDebug()<<"注册请求已被回应";
+        emit RegisterRelpyRece(data);
+        //注意，此处不用再次调用ListeningFromChatSrv，
+        //在注册逻辑中调用ListeningFromChatSrv本身是一种权宜，它本来是监管登陆后的信息交流
+        //后续会在clientwindow中手动Listening一遍
+
+    }else if(type == "create_group_result"){
+        qDebug()<<"收到创建群聊的服务器回馈";
+        emit createGroupReplyReceived(data);
+
         ListeningFromChatSrv();
     }
     // 添加更多type的处理...
@@ -307,6 +400,23 @@ std::string NetworkManager::as_HttpGetImageByUserId(int &userId)
 
     return request;
 
+}
+
+std::string NetworkManager::as_HttpSearchImageByUserId(int &userId)
+{
+    QUrl url(QString("http://172.30.229.221:23611/search?id=%1").arg(userId));
+    //此时path包括/download?id=1003
+    std::string path = url.path().toStdString() + "?" + url.query().toStdString();
+
+    // 构造 HTTP 请求报文
+    std::string request = "GET " + path + " HTTP/1.1\r\n";
+    request += "Host: " + url.host().toStdString() + "\r\n";
+    request += "Connection: keep-alive\r\n";
+    request += "\r\n";
+
+    //std::cout<<request<<std::endl;
+
+    return request;
 }
 
 void NetworkManager::SendToImageServer(std::string &buf)
@@ -355,15 +465,29 @@ void NetworkManager::RecvMyheadImageSrv(int myId)
                                   boost::asio::bind_executor(GetStrand(),
                                   [this,pid](const boost::system::error_code& ec, std::size_t bytes_transferred) {
                                       if (!ec) {
-            std::cout<<"into read until"<<std::endl;
-                                          // 使用 std::istream 读取头部
+                                          /*
+                                          // 获取streambuf中的数据长度
+                                          std::size_t buffer_data_size = boost::asio::buffer_size(buff_.data());
+                                          std::cout << "after Start-1 Buffer data size: " << buffer_data_size << std::endl;
                                           std::istream responseStream(&buff_);
-                                          std::string header;
-                                          std::string line;
-                                          //getline会消耗行末\n，故只能检测line ！=\r
-                                          while (std::getline(responseStream, line) && line != "\r") {
-                                              header += line + "\n";
-                                          }
+
+                                          //从istream流中拿到包头
+                                          std::string header = readHttpHeader(responseStream);
+
+                                          // 分析 header 获取 content length
+                                          size_t content_length = ParseContentLength(header);
+                                          std::cout<<content_length<<std::endl;
+                                          std::cout<<"bytes_transferred: "<<bytes_transferred<<std::endl;
+*/
+
+                                          std::cout<<"into read until"<<std::endl;
+                                          std::size_t buffer_data_size = boost::asio::buffer_size(buff_.data());
+                                          std::cout << "after Start-1 Buffer data size: " << buffer_data_size << std::endl;
+                                          std::istream responseStream(&buff_);
+
+                                          //从istream流中拿到包头
+                                          std::string header = readHttpHeader(responseStream);
+
 
                                           // 分析 header 拿到 content length
                                           size_t content_length = ParseContentLength(header);
@@ -374,6 +498,17 @@ void NetworkManager::RecvMyheadImageSrv(int myId)
                                           // 计算已经读取的正文长度
                                           size_t already_read_content_length = buff_.size();
 
+                                          //检查数据分包状况
+                                          if (buff_.size() >= content_length) {
+                                              //一次发来并未分包时
+                                              std::string image_data(boost::asio::buffers_begin(buff_.data()), boost::asio::buffers_begin(buff_.data()) + content_length);
+                                              buff_.consume(content_length);
+
+                                              // 发射信号,
+                                              emit headerReceived(QByteArray::fromStdString(image_data));
+
+                                              requestAllFriendImages(*pid);
+                                          }
 
                                           // 现在读取剩余的图像数据
                                           boost::asio::async_read(socket_, buff_,
@@ -381,17 +516,14 @@ void NetworkManager::RecvMyheadImageSrv(int myId)
                                                                   boost::asio::bind_executor(GetStrand(),
                                                                   [this, content_length,pid](const boost::system::error_code& ec, std::size_t bytes_transferred) {
                                                                       if (!ec) {
-                                                                          std::cout<<"into RecvMyhead async_read"<<std::endl;
+                                                                          std::cout<<"into twice RecvMyhead"<<std::endl;
                                                                           // 响应数据现在在 buff_ 中，处理图像数据...
                                                                           std::string image_data(boost::asio::buffers_begin(buff_.data()), boost::asio::buffers_end(buff_.data()));
                                                                           // 清空缓冲区
                                                                           buff_.consume(buff_.size());
 
-                                                                          // 将 std::string 转换为 QByteArray
-                                                                          QByteArray qByteArray(image_data.data(), static_cast<int>(image_data.size()));
-
                                                                           // 发射信号,
-                                                                          emit headerReceived(qByteArray);
+                                                                          emit headerReceived(QByteArray::fromStdString(image_data));
                                                                           //isConnect_ = true;
 
                                                                           //拿到头像后就开始链式启用requestAllFriendImages
@@ -464,9 +596,10 @@ void NetworkManager::StartReceivingImages() {
                                           int friendId = ParseFriendId(header); // 假设 header 中包含了 friendId
                                           if(friendId == -1){
                                               std::cout<<"ParseFriendId Error"<<std::endl;
-                                          //解析出-2，代表是服务器发来的end信号
+                                          //解析出-2，代表是服务器发来的end信号，该账号好友图像对接完了
                                           }else if(friendId == -2){
                                               std::cout << "Received end of images signal." << std::endl;
+                                              ListeningFromImageSrv();
                                               return;
                                           }
 
@@ -507,7 +640,7 @@ void NetworkManager::StartReceivingImages() {
 }
 
 
-//由于ImageServer之间交互为http报文，所以重写监听函数是必要的
+//重新利用起来的老函数，基本上负责了查找添加好友的图片逻辑
 void NetworkManager::ListeningFromImageSrv()
 {
     ClearStreambuf(buff_);
@@ -515,6 +648,56 @@ void NetworkManager::ListeningFromImageSrv()
     boost::asio::async_read_until(socket_, buff_, "\r\n\r\n",
                                   [this](const boost::system::error_code& ec, std::size_t bytes_transferred) {
                                       if (!ec) {
+            // 获取streambuf中的数据长度
+            std::size_t buffer_data_size = boost::asio::buffer_size(buff_.data());
+            std::cout << "ListeningFromImageSrv size: " << buffer_data_size << std::endl;
+            std::istream responseStream(&buff_);
+
+            //从istream流中拿到包头
+            std::string header = readHttpHeader(responseStream);
+
+            // 分析 header 获取 content length
+            size_t content_length = ParseContentLength(header);
+            std::cout<<content_length<<std::endl;
+            std::cout<<"ListeningFromImageSrv bytes_transferred: "<<bytes_transferred<<std::endl;
+
+            int friendId = ParseFriendId(header); // 假设 header 中包含了 friendId
+            //检查数据分包状况
+            if (buff_.size() >= content_length) {
+                //一次发来并未分包时
+                std::string image_data(boost::asio::buffers_begin(buff_.data()), boost::asio::buffers_begin(buff_.data()) + content_length);
+                buff_.consume(content_length);
+
+                emit iimageReceived(friendId, QByteArray::fromStdString(image_data));
+                // 继续监听
+                ListeningFromImageSrv();
+            } else{
+                // 数据过大产生分包时，读取剩余的图像数据
+                boost::asio::async_read(socket_, buff_,
+                                        boost::asio::transfer_exactly(content_length - buff_.size()),
+                                        [this,friendId](const boost::system::error_code& ec, std::size_t) {
+                                            if (!ec) {
+                                                std::cout<<"in twice read,friend id: "<<friendId<<std::endl;
+                                                // 处理图像数据
+                                                std::string image_data(boost::asio::buffers_begin(buff_.data()), boost::asio::buffers_end(buff_.data()));
+                                                buff_.consume(buff_.size()); // 清空缓冲区
+
+                                                // 发射信号，保存该图片
+                                                emit iimageReceived(friendId, QByteArray::fromStdString(image_data));
+
+                                                // 继续监听下一个图像
+                                                ListeningFromImageSrv();
+                                            } else {
+                                                std::cerr << "Error receiving image data: " << ec.message() << std::endl;
+                                            }
+                                        });
+            }
+        } else {
+            std::cerr << "Error receiving header data: " << ec.message() << std::endl;
+        }
+    });
+}
+            /*
                                           // 使用 std::istream 读取头部
                                           std::istream responseStream(&buff_);
                                           std::string header;
@@ -546,9 +729,9 @@ void NetworkManager::ListeningFromImageSrv()
                                                                           // 将 std::string 转换为 QByteArray
                                                                           QByteArray qByteArray(image_data.data(), static_cast<int>(image_data.size()));
 
-                                                                          // 发射信号
-                                                                          emit imageReceived(qByteArray);
-
+                                                                          // 发射信号 已废弃 旧版本对接chatwindow与image
+                                                                          //emit imageReceived(qByteArray);
+                                                                          emit iimageReceived(-1,qByteArray);
                                                                           ListeningFromImageSrv();
                                                                       } else {
                                                                           // 错误处理
@@ -561,6 +744,9 @@ void NetworkManager::ListeningFromImageSrv()
                                       }
                                   });
 }
+*/
+
+
 //分析header拿到file length
 size_t NetworkManager::ParseContentLength(const std::string& header)
 {

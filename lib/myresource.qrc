@@ -120,5 +120,23 @@
         <file>emoji/xk.png</file>
         <file>emoji/yw.png</file>
         <file>emoji/zj.png</file>
+        <file>win_border.png</file>
+        <file>login/bk_shadow.png</file>
+        <file>login/bk_shadow2.png</file>
+        <file>login/img_0.png</file>
+        <file>login/img_1.png</file>
+        <file>login/img_2.png</file>
+        <file>login/img_3.png</file>
+        <file>login/img_4.png</file>
+        <file>login/close_hover.png</file>
+        <file>login/close_normal.png</file>
+        <file>login/close_press.png</file>
+        <file>login/min_hover.png</file>
+        <file>login/min_normal.png</file>
+        <file>login/min_press.png</file>
+        <file>login/set_hover.png</file>
+        <file>login/set_normal.png</file>
+        <file>login/set_press.png</file>
+        <file>Icons/MainWindow/back3.png</file>
     </qresource>
 </RCC>

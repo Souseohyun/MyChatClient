@@ -1,6 +1,6 @@
 #ifndef NETWORKMANAGER_H
 #define NETWORKMANAGER_H
-//#define _RELEASE
+#define _RELEASE
 
 #include <nlohmann/json.hpp>
 #include <boost/asio.hpp>
@@ -9,9 +9,12 @@
 #include <QUrl>
 #include <QString>
 #include <QObject>
+#include <QTextDocument>
 
 #include <iostream>
 #include <fstream>
+
+#include "globalstorage.h"
 
 struct FriendInfo {
     int friend_id;
@@ -19,6 +22,13 @@ struct FriendInfo {
     std::string markname;
 };
 
+struct UserInfo {
+    int user_id;
+    std::string username;
+    std::string nickname;
+    int gender;
+    std::string head;
+};
 
 class NetworkManager : public QObject
 {
@@ -45,16 +55,33 @@ public:
 signals:
     void dataReceived(const QString& data);//已废弃
 
+    //未读消息加载到本地数据库的槽
+    void msgResponseReceived(const int,const nlohmann::json&);
+    //登录验证的槽（富含好友信息）
     void loginResponseReceived(bool success, const QString& message,int user_id);
      void loginResponseReceivedWithFriends(
         bool success, const QString& message, int user_id,
         const nlohmann::json& friends);
 
-    void messageReceived(const QString& message,int srcId,int destId);
+    void messageReceived(const QString& html,const QString& text,int srcId,int destId);
     void headerReceived(const QByteArray& imageData);
     void imageReceived(const QByteArray& imageData);
     void image_id_doubleReceived(int id,const QByteArray& imageData);
 
+    void SearchReceived(const nlohmann::json&);
+    //new
+    void iimageReceived(int id,const QByteArray& imageData);
+
+    //好友请求
+    void addFriendReceived(const nlohmann::json&);
+
+    //乙方了回应好友请求
+    void addFriendReplyReceived(const nlohmann::json&);
+
+    //服务器回送注册群聊请求
+    void createGroupReplyReceived(const nlohmann::json&);
+    //服务器回应了你的注册申请
+    void RegisterRelpyRece(const nlohmann::json&);
 public:
     NetworkManager();
     NetworkManager(boost::asio::ip::tcp::socket socket);
@@ -75,6 +102,8 @@ public:
 
     //ImageServer专属
     std::string as_HttpGetImageByUserId(int& userId);
+
+    std::string as_HttpSearchImageByUserId(int &userId);
     void SendToImageServer(std::string& buf);
     //仅在chatwindow创建后使用一次，获取自身头像
     void RecvMyheadImageSrv(int myId);

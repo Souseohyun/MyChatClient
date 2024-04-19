@@ -1,5 +1,7 @@
 #include "mainwindow.h"
 #include "loginwidget.h"
+#include "chatsession/cell.h"
+
 
 #include"myconfig.h"
 
@@ -20,10 +22,11 @@ int main(int argc, char *argv[])
             break;
         }
     }
-    //MainWindow w;
-    //w.show();
+
+
     QApplication::setQuitOnLastWindowClosed(false);
 
+    qRegisterMetaType<Cell*>("Cell*");
 
     //初始化一切配置
     MyConfig::InitMyConfig(a.applicationDirPath());
@@ -34,9 +37,6 @@ int main(int argc, char *argv[])
     //显示登陆界面
      LoginWidget login;
      login.show();
-
-    // ChatWindow c;
-    // c.show();
 
 
     return a.exec();

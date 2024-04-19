@@ -3,6 +3,12 @@
 
 #include "networkmanager.h"
 
+//base
+#include "base/clicklabel.h"
+
+//
+#include "registerwnd.h"
+
 //debug messagebox
 #include <QMessageBox>
 
@@ -53,10 +59,20 @@ private slots:
     void on_pushButton_clicked();
 
     void onLoginResponseReceived(bool success, const QString& message,int user_id);
-
+    //携带好友信息的信号槽
     void onLoginResponseReceivedWithFriends
         (bool success, const QString& message,
          int user_id, const nlohmann::json& friends);
+
+    //携带未读信息的信号槽
+    void onMsgResponseReceived(const int user_id,const nlohmann::json& msgJson);
+
+    //展开注册界面
+    void openRegisterWnd();
+    //注册界面关闭，show自己
+    void sltRegisterClose(QPoint);
+    //将注册界面携带的信号参数发给服务器
+    void sltRegisterGo(const nlohmann::json& js);
 
 protected:
 
@@ -78,8 +94,12 @@ private:
     void CreatLogo();
     void CreatShadow();
 
+    QLabel *MsgNotify;      //信息反馈界面
+    void ShowNotify(QString msg);
+    void HideNotify();
 
-
+    ClickLabel *registerAccount;    //注册
+    RegisterWnd *registerWnd;       //注册的界面
 };
 
 #endif // LOGINWIDGET_H

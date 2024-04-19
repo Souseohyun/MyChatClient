@@ -33,6 +33,11 @@ public:
         Msg_File
     };
 
+    void SetHTML(const QString&,User_Type);
+    QSize GetSize();
+    QSize GetHTMLSize();
+
+
     void SetHeaderImage(User_Type userType,QPixmap& headerPic);
 
 

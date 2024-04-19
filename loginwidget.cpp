@@ -3,6 +3,8 @@
 #include "clientwindow.h"
 #include "sqlite/sqldatabase.h"
 
+#include "chatwindow/bubbleinfo.h"
+
 #include "ui_loginwidget.h"
 
 LoginWidget::LoginWidget(QWidget *parent)
@@ -17,8 +19,31 @@ LoginWidget::LoginWidget(QWidget *parent)
 
     this->CreatShadow();        //创建无边框窗口阴影
 
-
     ui->setupUi(this);
+
+    MsgNotify= new QLabel(this);
+    MsgNotify->setFixedSize(430, 20);
+    MsgNotify->setStyleSheet("background-color:#09a3dc;font-size: 12px;font-family:Microsoft YaHei;border-radius:10px");
+    MsgNotify->hide();
+
+    registerAccount = new ClickLabel(this);
+    registerAccount->setText(tr("注册账号"));
+    registerAccount->setStyleSheet("font-size: 12px;font-family:Microsoft YaHei; color: #a6a6a6;");
+    registerAccount->setFixedSize(55, 20);
+    registerAccount->move(12, 300);
+    connect(registerAccount, &ClickLabel::clickSignal, this, &LoginWidget::openRegisterWnd);
+
+
+    registerWnd = new RegisterWnd();
+    registerWnd->hide();
+    //registerWnd转发内部privateWnd的信号被该slt接收
+    connect(registerWnd,&RegisterWnd::signalRegister,this,&LoginWidget::sltRegisterGo);
+
+    //net传来的注册回应
+    connect(&networkManager_,&NetworkManager::RegisterRelpyRece,registerWnd,&RegisterWnd::sltRegisterOK);
+
+    //register关闭
+    connect(registerWnd,&RegisterWnd::closeWindow,this,&LoginWidget::sltRegisterClose);
 
     ui->hideButton->setIcon(style()->standardIcon(QStyle::SP_TitleBarMinButton));
     ui->closeButton->setIcon(style()->standardIcon(QStyle::SP_DialogCloseButton));
@@ -38,6 +63,8 @@ LoginWidget::LoginWidget(QWidget *parent)
     connect(&networkManager_, &NetworkManager::loginResponseReceived,this, &LoginWidget::onLoginResponseReceived);
     connect(&networkManager_, &NetworkManager::loginResponseReceivedWithFriends,
             this, &LoginWidget::onLoginResponseReceivedWithFriends);
+
+    connect(&networkManager_,&NetworkManager::msgResponseReceived,this,&LoginWidget::onMsgResponseReceived);
 }
 
 LoginWidget::~LoginWidget()
@@ -160,6 +187,20 @@ void LoginWidget::CreatShadow()
 
 }
 
+void LoginWidget::ShowNotify(QString msg)
+{
+    this->setFixedSize(430, 350);
+    MsgNotify->move(0, 330);
+    MsgNotify->setText("  " + msg);
+    MsgNotify->show();
+}
+
+void LoginWidget::HideNotify()
+{
+    this->setFixedSize(430, 330);
+    MsgNotify->hide();
+}
+
 
 
 
@@ -180,6 +221,9 @@ void LoginWidget::on_pushButton_clicked()
     json["username"] = username.toStdString();
     json["password"] = password.toStdString();  // 注意：明文传输密码是不安全的
 
+    MyConfig::strUserName = username;
+    MyConfig::strPassWord = password;
+
     // 通过 NetworkManager 发送 JSON 数据到服务器
     networkManager_.SendToServer(json);
 
@@ -194,7 +238,8 @@ void LoginWidget::onLoginResponseReceived(bool success, const QString& message,i
     if (success) {
         //身份核验通过后，创建属于该用户的本地数据库
         SqlDataBase::Instance()->openDb(user_id);
-
+        MyConfig::userId = user_id;
+        MyConfig::SaveUserInfo();
 
         ClientWindow* cli = new ClientWindow(std::move(networkManager_.GetSocket()), user_id);
 
@@ -204,7 +249,8 @@ void LoginWidget::onLoginResponseReceived(bool success, const QString& message,i
         this->close();
     } else {
         // 登录失败，显示错误信息
-        QMessageBox::warning(this, "Login Failed", message);
+        ShowNotify("登录失败，账号或密码错误！");
+        //QMessageBox::warning(this, "Login Failed", message);
     }
 }
 
@@ -236,6 +282,9 @@ void LoginWidget::onLoginResponseReceivedWithFriends(bool success, const QString
         SqlDataBase::Instance()->openDb(user_id);
         qDebug() << "Processing friends data...";
 
+        MyConfig::userId = user_id;
+        MyConfig::SaveUserInfo();
+
         // 遍历并打印好友信息
         for (const auto& friendJson : friends) {
             qDebug() << "Friend JSON:" << QString::fromStdString(friendJson.dump());
@@ -260,13 +309,66 @@ void LoginWidget::onLoginResponseReceivedWithFriends(bool success, const QString
         // 创建并显示客户端窗口
         ClientWindow* cli = new ClientWindow(std::move(networkManager_.GetSocket()), user_id);
         cli->show();
+        qDebug()<<"我现在new了client";
+        //QApplication::quit();
 
         this->close();
+        //QApplication::quit();
     }
      else {
         // 显示错误信息
         std::cerr << "Login failed: " << message.toStdString() << std::endl;
     }
+}
+
+void LoginWidget::onMsgResponseReceived(const int user_id, const nlohmann::json &msgJson)
+{
+    qDebug()<<"__DEBUG:INTO MsgResponse";
+    SqlDataBase::Instance()->openDb(user_id);
+    // 遍历每条消息
+    for (const auto& msg : msgJson) {
+        // 创建一个新的BubbleInfo对象来存储消息信息
+        BubbleInfo *info = new BubbleInfo;
+
+        info->srcid = msg.value("src_id",0);
+
+        info->myid = user_id;
+        info->destid = msg.value("dest_id",0);
+        info->isGroup = false;      //以后可能添加功能，尚不能如此武断
+        info->message = QString::fromStdString(msg.value("text",""));
+        //info->time = msg.value("datetime","")     // 消息时间
+        // info->msgType, info->fileSize, info->downloaded等其他字段根据需要设置
+
+        // 使用数据库对象添加消息历史
+        SqlDataBase::Instance()->addHistoryMsg(info);
+
+        // 清理创建的info对象以避免内存泄漏
+        delete info;
+    }
+}
+
+void LoginWidget::openRegisterWnd()
+{
+
+    qDebug()<<"into register";
+    registerWnd->move(this->pos().x(),this->pos().y()/* + 80*/);
+    registerWnd->show();
+    this->hide();
+
+}
+
+void LoginWidget::sltRegisterClose(QPoint pos)
+{
+    this->move(pos);
+    this->show();
+}
+
+void LoginWidget::sltRegisterGo(const nlohmann::json &js)
+{
+    qDebug()<<"准备发送注册信息";
+    //this->show();
+    networkManager_.SendToServer(js);
+    networkManager_.ListeningFromChatSrv();
 }
 
 

@@ -52,6 +52,7 @@ CellViewSon::CellViewSon(QWidget *parent,Cell *c,int tag)
 
 void CellViewSon::setPopMenu(QMenu *menu)
 {
+    qDebug()<<"————DEBUG::INTO CellViewSon setPopMenu";
     popMenu = menu;
 }
 

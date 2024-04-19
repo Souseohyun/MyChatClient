@@ -16,6 +16,8 @@ RoundLabel::RoundLabel(QWidget *parent,QString iconPath)
             // Scale the pixmap to fit the RoundLabel's current size while maintaining the aspect ratio
             pixmap = originalPixmap.scaled(this->size(), Qt::IgnoreAspectRatio, Qt::SmoothTransformation);
         }
+    }else{
+        qDebug()<<"iconPath is Empty ERROR";
     }
 }
 

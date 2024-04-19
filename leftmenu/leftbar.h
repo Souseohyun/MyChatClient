@@ -19,6 +19,10 @@ public:
     MyButton *settings;
     QButtonGroup *m_btnGroup;
 
+    MyButton *getContacts() const;
+
+    MyButton *getChatList() const;
+
 protected:
     // 重写鼠标操作以实现移动窗口
     virtual void mousePressEvent(QMouseEvent *event) override;

@@ -10,6 +10,7 @@
 #include <QStringList>
 #include <QDebug>
 #include <QFileInfo>
+#include <QTimer>
 
 #ifdef Q_OS_WIN
 #pragma comment(lib, "user32.lib")
@@ -21,17 +22,32 @@ LeftBar::LeftBar(int id,QWidget *parent) : QWidget(parent)
     setWindowFlag(Qt::FramelessWindowHint);
     setFixedWidth(55);
 
-    QString headPath = MyConfig::strHeadPath + QString::number(id)+".jpg";
-    QFileInfo fileInfo(headPath);
+    QString filename = QString("%1.jpg").arg(id);
+    QString fullPath = MyConfig::strHeadPath + filename;
+
+    //QString headPath = MyConfig::strHeadPath + QString::number(id)+".jpg";
+    QFileInfo fileInfo(fullPath);
     if(!fileInfo.exists()){
-        //MyConfig::strHeadFile = "default.png";
-        //headPath = MyConfig::strHeadPath + MyConfig::strHeadFile;
-        qDebug()<<"----------NOW ERROR OF LEFTBARRRRRRRRRRRR---------";
+        qDebug() << "No head image initially, trying after 2 seconds...";
+        // 第一次尝试
+        QTimer::singleShot(2000, this, [this, id]() {
+            QString retryHeadPath = MyConfig::strHeadPath + QString::number(id) + ".jpg";
+            QFileInfo retryFileInfo(retryHeadPath);
+            if (retryFileInfo.exists()) {
+                qDebug() << "Head image exists now, setting it.";
+                headLabel->setPixmap(retryHeadPath); // 假设你有一个方法来设置头像
+            } else {
+                qDebug() << "Still no head image.";
+                // 如果你需要再次重试，可以在这里再次使用 QTimer::singleShot
+                // 注意，这可能会导致无限重试，除非你设定一个重试次数限制
+            }
+        });
+
     }
 
     QStringList tmp;
-    headLabel = new RoundLabel(this,headPath);
-    //headLabel = new HeadLabel(this, headPath, ":/loginwnd/head_bkg_shadow", ":/loginwnd/head_bkg_highlight2",1);
+    headLabel = new RoundLabel(this,fullPath);
+
     headLabel->setFixedSize(40, 40);
     headLabel->move(8,15);
 
@@ -97,6 +113,16 @@ LeftBar::LeftBar(int id,QWidget *parent) : QWidget(parent)
     setPalette(palette);
 
     setFocusPolicy(Qt::StrongFocus);
+}
+
+MyButton *LeftBar::getChatList() const
+{
+    return chatList;
+}
+
+MyButton *LeftBar::getContacts() const
+{
+    return contacts;
 }
 
 void LeftBar::mousePressEvent(QMouseEvent *event)

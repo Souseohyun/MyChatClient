@@ -8,8 +8,8 @@
 #include <QMessageBox>
 #include <QFile>
 #include <QSqlError>
-
-
+#include <QJsonArray>
+#include <QSqlError>
 
 
 #define DATE_TME_FORMAT     QDateTime::currentDateTime().toString("yyyy/MM/dd hh:mm:ss")
@@ -73,6 +73,8 @@ bool SqlDataBase::openDb(const int &userId)
     QString dataName = MyConfig::strDatabasePath + "user_" + strUserId + ".db";
     QString connectionName = "userConnection_" + strUserId;  // 根据 userId 创建连接名
 
+    qDebug() << "Database path:" << dataName;
+
     if (QSqlDatabase::contains(connectionName)) {
         userdb = QSqlDatabase::database(connectionName); // 获取已存在的数据库连接
     } else {
@@ -99,7 +101,7 @@ bool SqlDataBase::openDb(const int &userId)
 
     query.exec("CREATE TABLE MySubgroup (name varchar(20) PRIMARY KEY, datetime varchar(20) )");
 
-    query.exec(QString("insert into MySubgroup values('默认分组','") + DATE_TME_FORMAT + "')");
+    query.exec(QString("insert into MySubgroup values('我的好友','") + DATE_TME_FORMAT + "')");
     query.exec(QString("insert into MySubgroup values('黑名单','") + DATE_TME_FORMAT + "')");
 
     // 创建历史聊天表 tag = 0表示私聊消息,tag = 1表示群聊消息,
@@ -109,8 +111,42 @@ bool SqlDataBase::openDb(const int &userId)
                "type INT, content varchar(500), filesize varchar(30), download bit, "
                "datetime BIGINT)");
 
+
+    qDebug() << "Database opened for user" << userId << "with connection name:" << connectionName;
+
     return true;
 }
+
+void SqlDataBase::addHistoryMsg(BubbleInfo *info) {
+    // 查询最新的消息ID
+    QSqlQuery query(userdb);
+    query.exec("SELECT id FROM MsgHistory ORDER BY id DESC;");
+    int maxId = 0; // 消息序号,为该表的主键
+    if (query.next()) {
+        maxId = query.value(0).toInt(); // 获取当前最高ID
+    }
+
+    // 准备插入新的消息记录
+    query.prepare("INSERT INTO MsgHistory (id, sender, myID, yourID, groupID, tag, "
+                  "type, content, filesize, download, datetime) "
+                  "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);");
+    query.bindValue(0, maxId + 1); // 自增ID
+    query.bindValue(1, info->srcid); // 发送者ID
+    query.bindValue(2, info->myid); // 我的ID
+    query.bindValue(3, info->destid); // 到达者ID
+    query.bindValue(4, 0/*info->groupID*/); // 待完成，群组ID，若无则为0
+    query.bindValue(5, 0/*info->tag*/); // 消息标签
+    query.bindValue(6, 0/*info->msgType*/); // 消息类型
+    query.bindValue(7, info->message); // 消息内容
+    query.bindValue(8, 0/*info->fileSize*/); // 文件大小，若无文件则为0
+    query.bindValue(9, 0/*info->downloaded*/); // 文件是否已下载
+    query.bindValue(10, info->time); // 消息发送时间
+
+    if (!query.exec()) {
+        qDebug() << "添加历史消息失败: " << query.lastError().text();
+    }
+}
+
 
 
 void SqlDataBase::addFriend(const int &myID, const int &friendID,
@@ -202,6 +238,35 @@ void SqlDataBase::addGroup(const int &myID, const int &groupID)
     //此处再向服务器添加一条加群信息
 }
 
+void SqlDataBase::createGroup(int groupId, const QString &groupName, int adminId, const QString &headImage)
+{
+    // 检查是否已经存在该群聊
+    QString strQuery = QString("SELECT * FROM MyGroup WHERE id = %1").arg(groupId);
+    QSqlQuery query(userdb);
+    query.exec(strQuery);
+
+    if (query.next()) {
+        // 查询到有该群聊，不添加
+        qDebug() << "群聊已存在，无法再次创建: " << groupId;
+        return;
+    }
+
+    // 插入新的群聊记录
+    query.prepare("INSERT INTO MyGroup (id, name, admin, head, tag, lastMsg, lastTime) "
+                  "VALUES (?, ?, ?, ?, ?, ?, ?);");
+    query.bindValue(0, groupId);
+    query.bindValue(1, groupName);
+    query.bindValue(2, adminId);
+    query.bindValue(3, headImage);
+    query.bindValue(4, false); // tag 初始值为 false
+    query.bindValue(5, ""); // lastMsg 初始值为空
+    query.bindValue(6, QDateTime::currentDateTime().toString("yyyy-MM-dd hh:mm:ss")); // 当前时间为最后消息时间
+
+    if (!query.exec()) {
+        qDebug() << "创建群聊失败: " << query.lastError().text();
+    }
+}
+
 bool SqlDataBase::deleteMyFriend(const int &myID, const int &friendID)
 {
     QString strQuery = "SELECT * FROM MyFriend ";
@@ -230,10 +295,17 @@ nlohmann::json SqlDataBase::getMyFriends() const
 
     json myFriends = json::array();
 
-    QString strQuery = "SELECT * FROM MyFriend ";
-    QSqlQuery query(strQuery);
-
+    QString strQuery = "SELECT * FROM MyFriend";
+    QSqlQuery query(userdb);            //一定要指定userdb，否则可能会not open db
+    query.prepare(strQuery);
+    int i = 0;
+    //成年老bug：query.exec是必须的啊，不是直接while query.next就可以了。
+    if (!query.exec()) {
+        qDebug() << "查询失败：" << query.lastError().text();
+                                         return nullptr; // 或处理错误
+    }
     while (query.next()){
+        qDebug()<<"i = "<<++i;
         json jsonFriend;
         jsonFriend["id"] = query.value("id").toInt();
         jsonFriend["head"] = query.value("head").toString().toStdString(); // 转换为 std::string
@@ -244,6 +316,151 @@ nlohmann::json SqlDataBase::getMyFriends() const
     }
 
     return myFriends;
+}
+
+nlohmann::json SqlDataBase::getMyGroups() const
+{
+    using json = nlohmann::json;
+
+    json myGroups = json::array(); // 使用nlohmann::json定义一个JSON数组
+
+    QString strQuery = "SELECT * FROM MyGroup";
+    QSqlQuery query(userdb);
+    query.prepare(strQuery);
+    if (!query.exec()) {
+        qDebug() << "查询失败：" << query.lastError().text();
+                                         return nullptr; // 或处理错误
+    }
+    while (query.next()) {
+        json group;
+        group["id"] = query.value(0).toInt();
+        group["name"] = query.value(1).toString().toStdString(); // 将QString转换为std::string
+        group["admin"] = query.value(2).toInt();
+        group["head"] = query.value(3).toString().toStdString(); // 同上
+        myGroups.push_back(group); // 将json对象添加到数组中
+    }
+
+    return myGroups; // 返回nlohmann::json类型的数组
+}
+
+nlohmann::json SqlDataBase::getMySubgroup() const
+{
+    using json = nlohmann::json;
+
+    json myGroup = json::array(); // 使用nlohmann::json定义一个JSON数组
+
+    QString strQuery = "SELECT * FROM MySubgroup";
+    QSqlQuery query(userdb); // 指定特定的数据库连接，否则可能not open db
+    query.prepare(strQuery);
+    if (!query.exec()) {
+        qDebug() << "查询失败：" << query.lastError().text();
+        return nullptr; // 或处理错误
+    }
+
+    while(query.next()){
+        json jsonGroup;
+        jsonGroup["name"] = query.value(0).toString().toStdString(); // 将QString转换为std::string
+        myGroup.push_back(jsonGroup); // 将json对象添加到数组中
+    }
+
+    return myGroup; // 返回nlohmann::json类型的数组
+}
+
+nlohmann::json SqlDataBase::getGroupInfo(int id) const
+{
+    QString strQuery = "SELECT * FROM MyGroup where id = ";
+    strQuery.append(QString::number(id));
+    QSqlQuery query(userdb);
+    query.prepare(strQuery);
+    //QSqlQuery query(strQuery);
+    nlohmann::json json;
+
+    if (!query.exec()) {
+        qDebug() << "查询失败：" << query.lastError().text();
+                                         return nullptr; // 或处理错误
+    }
+    while (query.next()) {
+        json["name"] = query.value(1).toString().toStdString();
+        json["head"] = query.value(3).toString().toStdString();
+    }
+    return json;
+}
+
+bool SqlDataBase::isMyFriend(const int &friendID){
+    QString strQuery = "SELECT * FROM MyFriend WHERE id = :friendID";
+    QSqlQuery query(userdb);
+    query.prepare(strQuery);
+    query.bindValue(":friendID", friendID);
+
+    if (!query.exec()) {
+        qDebug() << "查询失败：" << query.lastError().text();
+        return false; // 或其他错误处理
+    }
+
+    return query.next(); // 如果查询有结果，则表示是好友
+}
+
+bool SqlDataBase::isInGroup(const int &groupID){
+    QString strQuery = "SELECT * FROM MyGroup WHERE id = :groupID";
+    QSqlQuery query(userdb);
+    query.prepare(strQuery);
+    query.bindValue(":groupID", groupID);
+
+    if (!query.exec()) {
+        qDebug() << "查询失败：" << query.lastError().text();
+        return false; // 或其他错误处理
+    }
+
+    return query.next(); // 如果查询有结果，则表示在群组中
+}
+
+QVector<BubbleInfo *> SqlDataBase::QueryMsgHistory(int id, int tag, int count)
+{
+    qDebug()<<"__DEBUG:INTO HISTORY";
+    QString queryString = QString("SELECT * FROM MsgHistory");
+    if(tag == 0){
+        queryString.append(" WHERE (yourID="); // 查询发送给id的消息
+        queryString.append(QString::number(id));
+        queryString.append(" OR sender="); // 或者由id发送的消息
+        queryString.append(QString::number(id));
+        queryString.append(") and tag=");
+        queryString.append(QString::number(tag));
+        queryString.append(" ORDER BY id ASC;");
+    }else if(tag == 1){
+        queryString.append(" WHERE groupID=");
+        queryString.append(QString::number(id));
+        queryString.append(" and tag=");
+        queryString.append(QString::number(tag));
+        queryString.append(" ORDER BY id ASC;");
+    }
+
+    //当前只能无脑加载全程，往上翻时累计查10条 这种功能待完成
+    QVector<BubbleInfo*> bubbles;
+
+    QSqlQuery query(userdb);
+    if (!query.exec(queryString)) {
+        qDebug() << "查询历史消息失败: " << query.lastError().text();
+        return bubbles; // 返回空
+    }
+    while(query.next()){
+    //(id INT PRIMARY KEY, sender INT, myID INT, yourID INT, groupID INT, tag bit, type INT,
+    // content varchar(500), filesize varchar(30), download bit, datetime BIGINT);
+    //1|1003|1003|1004|0|0|0|marry me ! <img src=":/emoji/kl.png" />|0|0|1710345242
+        BubbleInfo *bubble = new BubbleInfo;
+        bubble->srcid = query.value(1).toInt();
+        bubble->myid = query.value(2).toInt();
+        bubble->destid = query.value(3).toInt();
+        bubble->isGroup = (query.value(4).toInt() == 0)? false : true;
+        //tag没有
+        //type没有
+        bubble->message = query.value(7).toString();
+        //filesize没有
+        //download tag 没有
+        bubble->time = query.value(10).toInt();
+
+        bubbles.push_back(bubble);
+    }
+    return bubbles;
 }
 
 //根据id获取数据库中头像路径

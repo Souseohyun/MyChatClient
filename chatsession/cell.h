@@ -3,6 +3,7 @@
 
 #include <QString>
 #include <QList>
+#include <QMetaType>
 
 #include "clientapi/status.h"
 
@@ -32,6 +33,7 @@ public:
 public:
     QString iconPath;
     QString name;
+    QString markname;
     QString subTitle;
     QString msg = "";
 
@@ -60,5 +62,7 @@ public:
     bool showNewMsg = false;
     QList<Cell *> childs;   //子项
 };
+
+Q_DECLARE_METATYPE(Cell)
 
 #endif // CELL_H

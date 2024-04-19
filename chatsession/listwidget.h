@@ -21,7 +21,7 @@ public:
     explicit ListWidget(QWidget* parent = nullptr,int tag = 0);
 
 
-
+    QList<Cell*> GetAllCells();
     Cell *GetRightClickedCell();//获取右击选中的格子
     //插入格子
     void insertCell(Cell *cell);
@@ -63,6 +63,7 @@ signals:
     void signalSonRightClicked();
 
     void signalOpenDialog(Cell* cell);
+
 
 
     void signalSonSelected(int id,QString name);

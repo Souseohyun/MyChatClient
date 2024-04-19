@@ -10,6 +10,7 @@
 #include <QObject>
 #include <QSqlDatabase>
 #include <QSqlQuery>
+
 #include <QMutex>
 
 
@@ -51,21 +52,24 @@ public:
     // 添加群组
     void addGroup(const int &myID, const int &groupID);
 
+    // 创建群
+    void createGroup(int groupId, const QString &groupName, int adminId, const QString &headImage);
+
     // 删除好友
     bool deleteMyFriend(const int &myID, const int &friendID);
 
     // 获取我的好友
     nlohmann::json getMyFriends() const;
     // 获取我的群组
-    QJsonArray getMyGroups() const;
+    nlohmann::json getMyGroups() const;
     // 获取我的分组
-    QJsonArray getMySubgroup() const;
-    // 获取我的历史聊天列表
+    nlohmann::json getMySubgroup() const;
+    // 获取我的聊天列表
     QJsonArray getMyChatList() const;
     // 获取好友信息
-    QJsonObject getFriendInfo(int id) const;
+    nlohmann::json getFriendInfo(int id) const;
     // 获取群信息
-    QJsonObject getGroupInfo(int id) const;
+    nlohmann::json getGroupInfo(int id) const;
 
     // 判断改好友是否已经是我的好友了
     bool isMyFriend(const int &friendID);
@@ -76,8 +80,8 @@ public:
 
     void updateFileMsg(BubbleInfo *info);
 
-    // 获取历史聊天记录,id表示聊天窗口好友或者群的id,tag标记这是私聊还是群聊窗口,count表示最近的记录数
-    QVector<BubbleInfo *> queryHistory(int id,int tag, int count);
+    // 获取历史聊天记录,id表示对方的id,tag标记这是私聊还是群聊窗口,count表示需加载的记录数（-1代表all）
+    QVector<BubbleInfo *> QueryMsgHistory(int id,int tag, int count);
 
     // 测试使用，打印数据库中的所有信息
     void queryAll();

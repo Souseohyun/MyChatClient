@@ -76,6 +76,19 @@ if(${QT_VERSION_MAJOR} GREATER_EQUAL 6)
         base/searchbar.h base/searchbar.cpp
         leftmenu/leftbar.h leftmenu/leftbar.cpp
         base/emojipicker.h base/emojipicker.cpp
+        leftmenu/contactslistwidget.h leftmenu/contactslistwidget.cpp
+        backgroundwidget.h backgroundwidget.cpp
+        leftmenu/addsubgroup.h leftmenu/addsubgroup.cpp
+        leftmenu/findfriendwnd.h leftmenu/findfriendwnd.cpp
+        leftmenu/addfriendwnd.h leftmenu/addfriendwnd.cpp
+        base/clicklabel.h base/clicklabel.cpp
+        registerwnd.h registerwnd.cpp
+        base/mywindow.h base/mywindow.cpp
+        globalstorage.h globalstorage.cpp
+        settingswnd.h settingswnd.cpp
+        leftmenu/creategroupwnd.h leftmenu/creategroupwnd.cpp
+        clientapi/screenwidget.h clientapi/screenwidget.cpp
+
 
     )
 # Define target properties for Android with Qt 6 as:
